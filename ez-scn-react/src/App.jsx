@@ -2,19 +2,22 @@
 // PennyWise — App Root with Routing
 // ============================================
 
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import Dashboard from '@/pages/Dashboard';
+import OnboardingPage from '@/pages/OnboardingPage';
+import AnalysisPage from '@/pages/AnalysisPage';
 import TermsPage from '@/pages/TermsPage';
 import PrivacyPage from '@/pages/PrivacyPage';
 import CookieConsent from '@/components/CookieConsent';
 import { Loader2 } from 'lucide-react';
 
 // ── Protected Route wrapper ──
-function ProtectedRoute({ children }) {
-  const { isAuthenticated, loading } = useAuth();
+function ProtectedRoute({ children, allowIncomplete }) {
+  const { isAuthenticated, user, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -29,6 +32,11 @@ function ProtectedRoute({ children }) {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Redirect to onboarding if profile not complete (unless already there)
+  if (!allowIncomplete && user && user.profile_complete === false && location.pathname !== '/onboarding') {
+    return <Navigate to="/onboarding" replace />;
   }
 
   return children;
@@ -66,7 +74,9 @@ function App() {
         <Route path="/privacy" element={<PrivacyPage />} />
 
         {/* ── Protected routes ── */}
+        <Route path="/onboarding" element={<ProtectedRoute allowIncomplete><OnboardingPage /></ProtectedRoute>} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/analysis" element={<ProtectedRoute><AnalysisPage /></ProtectedRoute>} />
 
         {/* ── Default redirect ── */}
         <Route path="/" element={<Navigate to="/login" replace />} />
