@@ -565,6 +565,18 @@ async function quickHealth(userId) {
     Math.round(baseScore + debtScore + categoryScore + goalScore + inflationScore)
   );
 
+  // Hourly wage for life-hours context
+  let hourlyWage = 0;
+  try {
+    const wageResult = await db.query(
+      'SELECT hourly_wage FROM work_profiles WHERE user_id = $1 LIMIT 1',
+      [userId]
+    );
+    if (wageResult.rows.length > 0) {
+      hourlyWage = parseFloat(wageResult.rows[0].hourly_wage) || 0;
+    }
+  } catch { /* fallback */ }
+
   return {
     health_status: healthStatus,
     financial_health_score: financialHealthScore,
@@ -572,6 +584,7 @@ async function quickHealth(userId) {
     total_expenses: round2(totalExpenses),
     net_savings: round2(netSavings),
     savings_rate: round2(savingsRate),
+    hourly_wage: round2(hourlyWage),
   };
 }
 

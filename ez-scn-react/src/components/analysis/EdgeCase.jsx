@@ -1,6 +1,7 @@
 import HealthBadge from './HealthBadge';
 import RecommendationCard from './RecommendationCard';
 import SixMonthProjection from './SixMonthProjection';
+import SixMonthChart from './SixMonthChart';
 import { AlertCircle, Target, TrendingDown } from 'lucide-react';
 
 export default function EdgeCase({ analysis }) {
@@ -77,7 +78,11 @@ export default function EdgeCase({ analysis }) {
             </div>
           )}
 
-          <div className="pt-2">
+          <div className="pt-2 space-y-6">
+            <SixMonthChart
+              netSavings={analysis.net_savings}
+              inflationRate={analysis.inflation_rate}
+            />
             <SixMonthProjection 
               projection={analysis.six_month_projection} 
               inflationRate={analysis.inflation_rate} 

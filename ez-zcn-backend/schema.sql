@@ -175,6 +175,22 @@ CREATE TABLE notifications_log (
 
 
 -- ============================================
+-- 8.11 Weekly Expense Entries Table
+-- ============================================
+CREATE TABLE weekly_expense_entries (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id             UUID REFERENCES users(id) ON DELETE CASCADE,
+  week_start_date     DATE NOT NULL,                   -- must be a Monday
+  week_end_date       DATE NOT NULL,                   -- Sunday
+  category_id         UUID REFERENCES expense_categories(id),
+  custom_label        VARCHAR(255),
+  amount              DECIMAL(12,2) NOT NULL,
+  notes               TEXT,
+  created_at          TIMESTAMP DEFAULT NOW()
+);
+
+
+-- ============================================
 -- INDEXES for performance
 -- ============================================
 CREATE INDEX idx_work_profiles_user_id ON work_profiles(user_id);

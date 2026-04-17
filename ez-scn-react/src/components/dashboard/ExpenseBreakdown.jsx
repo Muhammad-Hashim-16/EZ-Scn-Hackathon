@@ -1,10 +1,12 @@
 // ============================================
 // Dashboard — Expense Breakdown
 // Donut chart + itemized list
+// Uses MoneyValue for animated toggling
 // ============================================
 
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { useLifeHours } from '@/context/LifeHoursContext';
+import MoneyValue from '@/components/shared/MoneyValue';
 
 const CATEGORY_ICONS = {
   'Housing': '🏠', 'Utility Bills': '💡', 'Grocery': '🛒',
@@ -28,7 +30,7 @@ function getIcon(name) {
 }
 
 export default function ExpenseBreakdown({ breakdown }) {
-  const { fmt, convert, unit } = useLifeHours();
+  const { fmt, convert } = useLifeHours();
 
   if (!breakdown || breakdown.length === 0) return null;
 
@@ -87,10 +89,10 @@ export default function ExpenseBreakdown({ breakdown }) {
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl
                            hover:bg-gray-50 transition-colors group text-left cursor-pointer"
               >
-                {/* Icon + Color dot */}
+                {/* Icon */}
                 <span className="text-lg shrink-0">{getIcon(cat.parent_category_name)}</span>
 
-                {/* Name */}
+                {/* Name + bar */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground truncate group-hover:text-[#01411C] transition-colors">
                     {cat.parent_category_name}
@@ -109,7 +111,7 @@ export default function ExpenseBreakdown({ breakdown }) {
                 {/* Amount */}
                 <div className="text-right shrink-0 ml-2">
                   <p className="text-sm font-semibold text-foreground">
-                    {fmt(cat.total)}
+                    <MoneyValue amount={cat.total} />
                   </p>
                   <p className="text-[11px] text-muted-foreground">{pct.toFixed(1)}%</p>
                 </div>

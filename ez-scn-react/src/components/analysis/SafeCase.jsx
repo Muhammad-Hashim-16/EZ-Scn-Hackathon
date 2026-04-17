@@ -1,5 +1,6 @@
 import HealthBadge from './HealthBadge';
 import SixMonthProjection from './SixMonthProjection';
+import SixMonthChart from './SixMonthChart';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Sparkles, CheckCircle, TrendingUp } from 'lucide-react';
 
@@ -98,6 +99,11 @@ export default function SafeCase({ analysis }) {
               </p>
             </div>
           )}
+
+          <SixMonthChart
+            netSavings={analysis.net_savings}
+            inflationRate={analysis.inflation_rate}
+          />
 
           <SixMonthProjection 
             projection={analysis.six_month_projection} 

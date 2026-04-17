@@ -1,15 +1,22 @@
 // ============================================
 // PennyWise — Savings Goal Routes
-// GET    /api/goals
 // POST   /api/goals
-// PUT    /api/goals/:id
+// GET    /api/goals
+// PUT    /api/goals/:id/contribute
 // DELETE /api/goals/:id
-// PATCH  /api/goals/:id/progress
 // ============================================
 
 const express = require('express');
+const { protect } = require('../middleware/authMiddleware');
+const goalController = require('../controllers/goalController');
+
 const router = express.Router();
 
-// TODO: Implement savings goal routes
+router.use(protect);
+
+router.post('/', goalController.createGoal);
+router.get('/', goalController.getGoals);
+router.put('/:id/contribute', goalController.contributeToGoal);
+router.delete('/:id', goalController.deleteGoal);
 
 module.exports = router;

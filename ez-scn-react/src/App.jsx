@@ -9,6 +9,8 @@ import RegisterPage from '@/pages/RegisterPage';
 import DashboardPage from '@/pages/DashboardPage';
 import OnboardingPage from '@/pages/OnboardingPage';
 import AnalysisPage from '@/pages/AnalysisPage';
+import GoalsPage from '@/pages/GoalsPage';
+import WeeklyTrackerPage from '@/pages/WeeklyTrackerPage';
 import TermsPage from '@/pages/TermsPage';
 import PrivacyPage from '@/pages/PrivacyPage';
 import AppLayout from '@/components/layout/AppLayout';
@@ -81,8 +83,8 @@ function App() {
         <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/analysis" element={<AnalysisPage />} />
-          <Route path="/goals" element={<div className="p-6"><h1 className="text-2xl font-bold">Goals</h1><p className="text-muted-foreground mt-2">Coming soon.</p></div>} />
-          <Route path="/weekly" element={<div className="p-6"><h1 className="text-2xl font-bold">Weekly Tracker</h1><p className="text-muted-foreground mt-2">Coming soon.</p></div>} />
+          <Route path="/goals" element={<GoalsPage />} />
+          <Route path="/weekly" element={<WeeklyTrackerPage />} />
           <Route path="/settings" element={<div className="p-6"><h1 className="text-2xl font-bold">Settings</h1><p className="text-muted-foreground mt-2">Coming soon.</p></div>} />
         </Route>
 

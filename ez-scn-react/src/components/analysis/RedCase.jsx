@@ -1,6 +1,7 @@
 import HealthBadge from './HealthBadge';
 import RecommendationCard from './RecommendationCard';
 import SixMonthProjection from './SixMonthProjection';
+import SixMonthChart from './SixMonthChart';
 import { ShieldAlert, AlertOctagon, Info } from 'lucide-react';
 
 export default function RedCase({ analysis }) {
@@ -73,7 +74,11 @@ export default function RedCase({ analysis }) {
             </div>
           )}
 
-          <div className="pt-2">
+          <div className="pt-2 space-y-6">
+            <SixMonthChart
+              netSavings={analysis.net_savings}
+              inflationRate={analysis.inflation_rate}
+            />
             <SixMonthProjection 
               projection={analysis.six_month_projection} 
               inflationRate={analysis.inflation_rate} 

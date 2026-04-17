@@ -1,14 +1,13 @@
 // ============================================
 // Dashboard — Summary Cards Row
 // Income · Expenses · Net Savings
+// Uses MoneyValue for animated PKR/Hours switch
 // ============================================
 
 import { TrendingUp, TrendingDown, PiggyBank } from 'lucide-react';
-import { useLifeHours } from '@/context/LifeHoursContext';
+import MoneyValue from '@/components/shared/MoneyValue';
 
 export default function SummaryCards({ analysis }) {
-  const { fmt } = useLifeHours();
-
   const cards = [
     {
       label: 'Total Income',
@@ -62,7 +61,7 @@ export default function SummaryCards({ analysis }) {
               </div>
 
               <p className="text-2xl font-bold tracking-tight">
-                {fmt(card.value)}
+                <MoneyValue amount={card.value} />
               </p>
 
               {card.badge && (
