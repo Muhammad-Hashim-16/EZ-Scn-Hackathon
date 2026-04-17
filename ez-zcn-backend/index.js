@@ -139,12 +139,19 @@ app.use((err, req, res, next) => {
 // ============================================
 // 10. Start Server
 // ============================================
+const { startInflationJob } = require('./jobs/inflationJob');
+const { startNotificationJobs } = require('./jobs/notificationJob');
+
 app.listen(PORT, () => {
   console.log(`\n🪙  PennyWise API is running`);
   console.log(`   Port:        ${PORT}`);
   console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`   Frontend:    ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
   console.log(`   Health:      http://localhost:${PORT}/api/health\n`);
+
+  // Start background jobs
+  startInflationJob();
+  startNotificationJobs();
 });
 
 module.exports = app;

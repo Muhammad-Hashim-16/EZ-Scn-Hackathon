@@ -29,7 +29,8 @@ CREATE TABLE users (
   updated_at            TIMESTAMP DEFAULT NOW(),
   last_login            TIMESTAMP,
   is_verified           BOOLEAN DEFAULT FALSE,
-  profile_complete      BOOLEAN DEFAULT FALSE
+  profile_complete      BOOLEAN DEFAULT FALSE,
+  fcm_token             TEXT                             -- Firebase Cloud Messaging token
 );
 
 -- ============================================

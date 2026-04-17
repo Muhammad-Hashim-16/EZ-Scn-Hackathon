@@ -2,15 +2,16 @@
 // PennyWise — App Root with Routing
 // ============================================
 
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
-import Dashboard from '@/pages/Dashboard';
+import DashboardPage from '@/pages/DashboardPage';
 import OnboardingPage from '@/pages/OnboardingPage';
 import AnalysisPage from '@/pages/AnalysisPage';
 import TermsPage from '@/pages/TermsPage';
 import PrivacyPage from '@/pages/PrivacyPage';
+import AppLayout from '@/components/layout/AppLayout';
 import CookieConsent from '@/components/CookieConsent';
 import { Loader2 } from 'lucide-react';
 
@@ -39,7 +40,7 @@ function ProtectedRoute({ children, allowIncomplete }) {
     return <Navigate to="/onboarding" replace />;
   }
 
-  return children;
+  return children || <Outlet />;
 }
 
 // ── Guest Route wrapper (redirect if already logged in) ──
@@ -73,10 +74,17 @@ function App() {
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
 
-        {/* ── Protected routes ── */}
+        {/* ── Onboarding (protected, no layout, allow incomplete profile) ── */}
         <Route path="/onboarding" element={<ProtectedRoute allowIncomplete><OnboardingPage /></ProtectedRoute>} />
-        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-        <Route path="/analysis" element={<ProtectedRoute><AnalysisPage /></ProtectedRoute>} />
+
+        {/* ── Protected routes inside AppLayout (sidebar / bottom nav) ── */}
+        <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/analysis" element={<AnalysisPage />} />
+          <Route path="/goals" element={<div className="p-6"><h1 className="text-2xl font-bold">Goals</h1><p className="text-muted-foreground mt-2">Coming soon.</p></div>} />
+          <Route path="/weekly" element={<div className="p-6"><h1 className="text-2xl font-bold">Weekly Tracker</h1><p className="text-muted-foreground mt-2">Coming soon.</p></div>} />
+          <Route path="/settings" element={<div className="p-6"><h1 className="text-2xl font-bold">Settings</h1><p className="text-muted-foreground mt-2">Coming soon.</p></div>} />
+        </Route>
 
         {/* ── Default redirect ── */}
         <Route path="/" element={<Navigate to="/login" replace />} />

@@ -116,12 +116,12 @@ async function analyzeFinances(userId) {
   let annualInflationRate = 12.0; // fallback default for Pakistan
   try {
     const inflResult = await db.query(
-      `SELECT rate FROM inflation_cache
+      `SELECT value FROM inflation_cache
        WHERE data_type = 'cpi'
        ORDER BY fetched_at DESC LIMIT 1`
     );
     if (inflResult.rows.length > 0) {
-      annualInflationRate = parseFloat(inflResult.rows[0].rate);
+      annualInflationRate = parseFloat(inflResult.rows[0].value);
     }
   } catch {
     // Use fallback
@@ -533,10 +533,10 @@ async function quickHealth(userId) {
   let realSavings = netSavings;
   try {
     const inflResult = await db.query(
-      `SELECT rate FROM inflation_cache WHERE data_type = 'cpi' ORDER BY fetched_at DESC LIMIT 1`
+      `SELECT value FROM inflation_cache WHERE data_type = 'cpi' ORDER BY fetched_at DESC LIMIT 1`
     );
     if (inflResult.rows.length > 0) {
-      const monthlyInfl = Math.pow(1 + parseFloat(inflResult.rows[0].rate) / 100, 1 / 12) - 1;
+      const monthlyInfl = Math.pow(1 + parseFloat(inflResult.rows[0].value) / 100, 1 / 12) - 1;
       realSavings = round2(netSavings * (1 - monthlyInfl));
     }
   } catch { /* fallback */ }
