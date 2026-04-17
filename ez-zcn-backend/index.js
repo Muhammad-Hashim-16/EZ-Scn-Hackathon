@@ -1,16 +1,17 @@
 const express = require('express');
+const supabase = require('./supabaseClient'); // Import the client
 const app = express();
-const PORT = 3000;
 
-// Middleware to parse JSON request bodies
 app.use(express.json());
 
-// Basic Route
-app.get('/', (req, res) => {
-  res.send('Hello from the Express backend!');
+// Example: Fetch data from a table called 'users'
+app.get('/users', async (req, res) => {
+  const { data, error } = await supabase.from('users').select('*');
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data);
 });
 
-// Start Server
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
-});
+app.listen(3000, () => console.log('Server running on http://localhost:3000'));
