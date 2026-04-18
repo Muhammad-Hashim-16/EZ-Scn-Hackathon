@@ -30,10 +30,11 @@ function generateTokens(user) {
 // Helper: Set refresh token as httpOnly cookie
 // ──────────────────────────────────────────
 function setRefreshCookie(res, refreshToken) {
+  const IS_PROD = process.env.NODE_ENV === 'production';
   res.cookie('rw_refresh', refreshToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'Strict',
+    secure: IS_PROD,
+    sameSite: IS_PROD ? 'None' : 'Lax',   // 'None' required for cross-origin Vercel ↔ backend
     maxAge: 7 * 24 * 60 * 60 * 1000,   // 7 days in ms
     path: '/',
   });
@@ -125,7 +126,7 @@ async function login(req, res) {
 
     // ── 1. Find user by email ──
     const result = await db.query(
-      'SELECT id, email, password_hash, full_name, profile_complete FROM users WHERE email = $1',
+      'SELECT id, email, password_hash, full_name, profile_complete, weekly_tracker_opt_in, has_children, notification_enabled FROM users WHERE email = $1',
       [email.toLowerCase().trim()]
     );
 
@@ -172,6 +173,9 @@ async function login(req, res) {
         email: user.email,
         full_name: user.full_name,
         profile_complete: user.profile_complete,
+        weekly_tracker_opt_in: user.weekly_tracker_opt_in,
+        has_children: user.has_children,
+        notification_enabled: user.notification_enabled,
       },
     });
   } catch (error) {

@@ -1,4 +1,5 @@
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { formatPKR } from '@/utils/formatters';
 
 export default function SixMonthProjection({ projection, inflationRate }) {
   if (!projection || projection.length === 0) return null;
@@ -13,9 +14,9 @@ export default function SixMonthProjection({ projection, inflationRate }) {
             <LineChart data={projection} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
               <XAxis dataKey="month" tickFormatter={(val) => `Mo ${val}`} stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} />
-              <YAxis stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `PKR ${(val/1000).toFixed(0)}k`} />
+              <YAxis stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `PKR ${Math.round(val/1000)}k`} />
               <Tooltip 
-                formatter={(value) => [`PKR ${value.toLocaleString()}`, '']}
+                formatter={(value) => [formatPKR(value), '']}
                 labelFormatter={(label) => `Month ${label}`}
                 contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
               />
@@ -40,9 +41,9 @@ export default function SixMonthProjection({ projection, inflationRate }) {
               {projection.map((item, i) => (
                 <tr key={i} className="border-b border-gray-100 last:border-0 hover:bg-gray-50/50">
                   <td className="px-4 py-3 font-medium text-foreground">Month {item.month}</td>
-                  <td className="px-4 py-3">PKR {item.nominal_savings.toLocaleString()}</td>
-                  <td className="px-4 py-3 font-medium text-[#01411C]">PKR {item.real_value.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right text-red-600">- PKR {item.purchasing_power_loss.toLocaleString()}</td>
+                  <td className="px-4 py-3">{formatPKR(item.nominal_savings)}</td>
+                  <td className="px-4 py-3 font-medium text-[#01411C]">{formatPKR(item.real_value)}</td>
+                  <td className="px-4 py-3 text-right text-red-600">- {formatPKR(item.purchasing_power_loss)}</td>
                 </tr>
               ))}
             </tbody>

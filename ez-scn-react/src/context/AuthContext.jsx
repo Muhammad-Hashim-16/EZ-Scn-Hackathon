@@ -5,6 +5,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import * as authService from '@/services/authService';
+import { setApiToken } from '@/services/api';
 
 const AuthContext = createContext(null);
 
@@ -56,6 +57,7 @@ export function AuthProvider({ children }) {
         const result = await authService.refreshToken();
         if (result.success) {
           setAccessToken(result.accessToken);
+          setApiToken(result.accessToken);
 
           // Decode user info from JWT payload (base64)
           const payload = JSON.parse(atob(result.accessToken.split('.')[1]));
@@ -83,6 +85,7 @@ export function AuthProvider({ children }) {
     if (result.success) {
       setUser(result.user);
       setAccessToken(result.accessToken);
+      setApiToken(result.accessToken);
       startRefreshTimer();
     }
 
@@ -98,6 +101,7 @@ export function AuthProvider({ children }) {
     if (result.success) {
       setUser(result.user);
       setAccessToken(result.accessToken);
+      setApiToken(result.accessToken);
       startRefreshTimer();
     }
 
@@ -111,8 +115,16 @@ export function AuthProvider({ children }) {
     await authService.logout();
     setUser(null);
     setAccessToken(null);
+    setApiToken(null);
     stopRefreshTimer();
   }, [stopRefreshTimer]);
+
+  // ──────────────────────────────────────────
+  // Update User State
+  // ──────────────────────────────────────────
+  const updateUser = useCallback((updates) => {
+    setUser((prev) => (prev ? { ...prev, ...updates } : null));
+  }, []);
 
   // ──────────────────────────────────────────
   // Context value
@@ -125,6 +137,7 @@ export function AuthProvider({ children }) {
     login,
     register,
     logout,
+    updateUser,
   };
 
   return (

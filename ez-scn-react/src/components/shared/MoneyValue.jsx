@@ -11,11 +11,12 @@
 // ============================================
 
 import { useLifeHours } from '@/context/LifeHoursContext';
+import { formatPKR } from '@/utils/formatters';
 
 export default function MoneyValue({ amount, className = '' }) {
-  const { isLifeHoursMode, formatValue, toLifeHours } = useLifeHours();
+  const { isLifeHoursMode, toLifeHours } = useLifeHours();
 
-  const pkrText = `PKR ${(parseFloat(amount) || 0).toLocaleString()}`;
+  const pkrText = formatPKR(parseFloat(amount) || 0);
   const hoursText = toLifeHours(amount);
   const displayText = isLifeHoursMode ? hoursText : pkrText;
 

@@ -3,6 +3,7 @@ import RecommendationCard from './RecommendationCard';
 import SixMonthProjection from './SixMonthProjection';
 import SixMonthChart from './SixMonthChart';
 import { ShieldAlert, AlertOctagon, Info } from 'lucide-react';
+import { formatPKR } from '@/utils/formatters';
 
 export default function RedCase({ analysis }) {
   const deficit = Math.abs(analysis.net_savings);
@@ -32,7 +33,7 @@ export default function RedCase({ analysis }) {
             <AlertOctagon className="w-8 h-8 opacity-80" />
             <div>
               <p className="text-sm font-medium opacity-90">Current Deficit</p>
-              <p className="text-xl font-bold">You are spending PKR {deficit.toLocaleString()} more than you earn</p>
+              <p className="text-xl font-bold">You are spending {formatPKR(deficit)} more than you earn</p>
             </div>
           </div>
           <p className="text-xs max-w-[200px] text-center sm:text-right opacity-80">
@@ -56,7 +57,7 @@ export default function RedCase({ analysis }) {
           </div>
         </div>
 
-        {/* Right Column: Goals & Projections */}
+        {/* Right Column: Goals & Warnings */}
         <div className="space-y-6">
           
           {/* Goal Impact */}
@@ -74,17 +75,6 @@ export default function RedCase({ analysis }) {
             </div>
           )}
 
-          <div className="pt-2 space-y-6">
-            <SixMonthChart
-              netSavings={analysis.net_savings}
-              inflationRate={analysis.inflation_rate}
-            />
-            <SixMonthProjection 
-              projection={analysis.six_month_projection} 
-              inflationRate={analysis.inflation_rate} 
-            />
-          </div>
-
           <div className="flex gap-3 items-start p-4 bg-blue-50 text-blue-800 rounded-xl border border-blue-200 text-xs leading-relaxed">
             <Info className="w-5 h-5 shrink-0 mt-0.5" />
             <p>
@@ -93,6 +83,16 @@ export default function RedCase({ analysis }) {
           </div>
         </div>
       </div>
+
+      {/* Full-width: 6-Month Projection */}
+      <SixMonthChart
+        netSavings={analysis.net_savings}
+        inflationRate={analysis.inflation_rate}
+      />
+      <SixMonthProjection 
+        projection={analysis.six_month_projection} 
+        inflationRate={analysis.inflation_rate} 
+      />
     </div>
   );
 }

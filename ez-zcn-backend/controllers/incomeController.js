@@ -300,10 +300,114 @@ async function deleteIncomeSource(req, res) {
   }
 }
 
+// ============================================
+// POST /api/income/one-time
+// Add a one-time income (bonus, committee payout, etc.)
+// Also updates cumulative_savings in monthly_records
+// ============================================
+async function createOneTimeIncome(req, res) {
+  try {
+    const userId = req.user.id;
+    const { description, amount, received_date } = req.body;
+
+    const parsedAmount = parseFloat(amount);
+    if (!parsedAmount || parsedAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Amount must be greater than 0.',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+
+    // Insert the one-time income
+    const result = await db.query(
+      `INSERT INTO one_time_income (user_id, description, amount, received_date)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [userId, description || 'One-time income', parsedAmount, received_date || new Date()]
+    );
+
+    // Update cumulative_savings in the current month's monthly_record
+    const now = new Date();
+    const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+
+    const updateResult = await db.query(
+      `UPDATE monthly_records
+       SET cumulative_savings = cumulative_savings + $3
+       WHERE user_id = $1 AND month = $2
+       RETURNING cumulative_savings`,
+      [userId, monthStr, parsedAmount]
+    );
+
+    const newCumulative = updateResult.rows.length > 0
+      ? parseFloat(updateResult.rows[0].cumulative_savings)
+      : null;
+
+    return res.status(201).json({
+      success: true,
+      message: 'One-time income added.',
+      entry: {
+        id: result.rows[0].id,
+        description: result.rows[0].description,
+        amount: parseFloat(result.rows[0].amount),
+        received_date: result.rows[0].received_date,
+        created_at: result.rows[0].created_at,
+      },
+      cumulative_savings: newCumulative,
+    });
+  } catch (error) {
+    console.error('Income Controller — createOneTimeIncome error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to add one-time income.',
+      code: 'SERVER_ERROR',
+    });
+  }
+}
+
+// ============================================
+// GET /api/income/one-time
+// Returns all one-time income entries for the user
+// ============================================
+async function getOneTimeIncome(req, res) {
+  try {
+    const userId = req.user.id;
+
+    const result = await db.query(
+      `SELECT id, description, amount, received_date, created_at
+       FROM one_time_income
+       WHERE user_id = $1
+       ORDER BY received_date DESC`,
+      [userId]
+    );
+
+    return res.status(200).json({
+      success: true,
+      entries: result.rows.map(row => ({
+        id: row.id,
+        description: row.description,
+        amount: parseFloat(row.amount),
+        received_date: row.received_date,
+        created_at: row.created_at,
+      })),
+      total: result.rows.reduce((sum, row) => sum + parseFloat(row.amount), 0),
+    });
+  } catch (error) {
+    console.error('Income Controller — getOneTimeIncome error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch one-time income.',
+      code: 'SERVER_ERROR',
+    });
+  }
+}
+
 module.exports = {
   upsertWorkProfile,
   getWorkProfile,
   createIncomeSource,
   getIncomeSources,
   deleteIncomeSource,
+  createOneTimeIncome,
+  getOneTimeIncome,
 };

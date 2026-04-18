@@ -159,6 +159,20 @@ router.put(
   expenseController.updateExpense
 );
 
+// Redistribute expenses proportionally
+const redistributeValidation = [
+  body('new_total_expenses')
+    .notEmpty().withMessage('new_total_expenses is required.')
+    .isFloat({ gt: 0 }).withMessage('new_total_expenses must be greater than 0.'),
+];
+
+router.post(
+  '/redistribute',
+  redistributeValidation,
+  handleValidationErrors,
+  expenseController.redistributeExpenses
+);
+
 // Soft delete
 router.delete(
   '/:id',

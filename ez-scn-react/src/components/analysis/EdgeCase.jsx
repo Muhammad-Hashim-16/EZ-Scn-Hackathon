@@ -3,6 +3,7 @@ import RecommendationCard from './RecommendationCard';
 import SixMonthProjection from './SixMonthProjection';
 import SixMonthChart from './SixMonthChart';
 import { AlertCircle, Target, TrendingDown } from 'lucide-react';
+import { formatPKR } from '@/utils/formatters';
 
 export default function EdgeCase({ analysis }) {
   
@@ -56,14 +57,14 @@ export default function EdgeCase({ analysis }) {
             <div className="p-4 rounded-xl bg-green-50 border border-green-200 flex items-center justify-between mt-4">
               <div>
                 <p className="text-xs font-medium text-green-700 uppercase tracking-wide">Potential Total Savings</p>
-                <p className="text-lg font-bold text-green-800">PKR {totalPotentialSavings.toLocaleString()}/mo</p>
+                <p className="text-lg font-bold text-green-800">{formatPKR(totalPotentialSavings)}/mo</p>
               </div>
               <TrendingDown className="w-8 h-8 text-green-600 opacity-50" />
             </div>
           )}
         </div>
 
-        {/* Right Column: Projection & Warnings */}
+        {/* Right Column: Warnings */}
         <div className="space-y-6">
           {analysis.flags.debt_heavy && (
             <div className="p-4 rounded-xl border border-red-200 bg-red-50 text-red-800 text-sm">
@@ -77,19 +78,18 @@ export default function EdgeCase({ analysis }) {
               You are currently not saving any money. This leaves you vulnerable to emergencies.
             </div>
           )}
-
-          <div className="pt-2 space-y-6">
-            <SixMonthChart
-              netSavings={analysis.net_savings}
-              inflationRate={analysis.inflation_rate}
-            />
-            <SixMonthProjection 
-              projection={analysis.six_month_projection} 
-              inflationRate={analysis.inflation_rate} 
-            />
-          </div>
         </div>
       </div>
+
+      {/* Full-width: 6-Month Projection */}
+      <SixMonthChart
+        netSavings={analysis.net_savings}
+        inflationRate={analysis.inflation_rate}
+      />
+      <SixMonthProjection 
+        projection={analysis.six_month_projection} 
+        inflationRate={analysis.inflation_rate} 
+      />
     </div>
   );
 }

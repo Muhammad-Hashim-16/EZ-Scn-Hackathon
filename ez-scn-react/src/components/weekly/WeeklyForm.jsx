@@ -1,19 +1,32 @@
 // ============================================
-// PennyWise — Weekly Expense Form
-// Pre-populated category rows with quick entry
+// PennyWise — Weekly Expense Form (v2)
+//
+// Uses the user's ACTUAL expense categories
+// from their profile setup (user_expenses table).
+// Falls back to existing entries when editing.
 // ============================================
 
 import { useState } from 'react';
 import { Plus, X, Save, Loader2 } from 'lucide-react';
+import { formatPKR, formatNumber, safePct } from '@/utils/formatters';
 
-const DEFAULT_ROWS = [
-  { emoji: '🛒', label: 'Grocery', key: 'grocery' },
-  { emoji: '⛽', label: 'Fuel', key: 'fuel' },
-  { emoji: '🍽️', label: 'Eating Out', key: 'eating_out' },
-  { emoji: '💊', label: 'Medicine', key: 'medicine' },
-  { emoji: '🧒', label: 'Children (misc)', key: 'children' },
-  { emoji: '📦', label: 'Other', key: 'other' },
-];
+// Emoji lookup for common category labels
+function getEmoji(label) {
+  const l = (label || '').toLowerCase();
+  if (l.includes('grocery') || l.includes('sabzi')) return '🛒';
+  if (l.includes('fuel') || l.includes('petrol') || l.includes('transport')) return '⛽';
+  if (l.includes('eat') || l.includes('restaurant') || l.includes('food') || l.includes('dining')) return '🍽️';
+  if (l.includes('medic') || l.includes('doctor') || l.includes('health') || l.includes('pharma')) return '💊';
+  if (l.includes('child') || l.includes('school') || l.includes('kid') || l.includes('education')) return '🧒';
+  if (l.includes('utility') || l.includes('electric') || l.includes('gas') || l.includes('bill') || l.includes('water')) return '💡';
+  if (l.includes('rent') || l.includes('house') || l.includes('home')) return '🏠';
+  if (l.includes('phone') || l.includes('internet') || l.includes('mobile')) return '📱';
+  if (l.includes('cloth') || l.includes('shopping')) return '👗';
+  if (l.includes('entertain') || l.includes('movie') || l.includes('outing')) return '🎬';
+  if (l.includes('insurance')) return '🛡️';
+  if (l.includes('loan') || l.includes('emi') || l.includes('debt')) return '🏦';
+  return '📦';
+}
 
 function formatWeekLabel(start, end) {
   const s = new Date(start);
@@ -23,8 +36,20 @@ function formatWeekLabel(start, end) {
   return `${s.toLocaleDateString('en-PK', opts)} – ${e.toLocaleDateString('en-PK', opts)}, ${year}`;
 }
 
-export default function WeeklyForm({ weekStart, weekEnd, onSave, onCancel, existingEntries }) {
-  // Initialize rows with existing data or defaults
+export default function WeeklyForm({
+  weekStart,
+  weekEnd,
+  weekNumber,
+  weeklyBudget,
+  monthlyBudget,
+  runningMonthlyTotal,
+  remainingBudget,
+  onSave,
+  onCancel,
+  existingEntries,
+  userCategories,
+}) {
+  // Initialize rows from user categories (or existing entries when editing)
   const initRows = () => {
     if (existingEntries && existingEntries.length > 0) {
       return existingEntries.map((e, i) => ({
@@ -36,30 +61,27 @@ export default function WeeklyForm({ weekStart, weekEnd, onSave, onCancel, exist
         category_id: e.category_id,
       }));
     }
-    return DEFAULT_ROWS.map((r) => ({
-      id: r.key,
-      label: r.label,
-      emoji: r.emoji,
-      amount: '',
-      notes: '',
-      category_id: null,
-    }));
+
+    // Use user's actual expense categories (only those with amount > 0)
+    if (userCategories && userCategories.length > 0) {
+      return userCategories.map((cat, i) => ({
+        id: `cat_${cat.expense_id || i}`,
+        label: cat.label,
+        emoji: getEmoji(cat.label),
+        amount: '',
+        notes: '',
+        category_id: cat.category_id,
+        monthlyRef: cat.monthly_amount,
+      }));
+    }
+
+    // Absolute fallback (shouldn't reach here)
+    return [{ id: 'fallback_0', label: 'Expense', emoji: '📦', amount: '', notes: '', category_id: null }];
   };
 
   const [rows, setRows] = useState(initRows);
-  const [customRows, setCustomRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
-
-  function getEmoji(label) {
-    const l = (label || '').toLowerCase();
-    if (l.includes('grocery') || l.includes('sabzi')) return '🛒';
-    if (l.includes('fuel') || l.includes('petrol')) return '⛽';
-    if (l.includes('eat') || l.includes('restaurant') || l.includes('food')) return '🍽️';
-    if (l.includes('medic') || l.includes('doctor') || l.includes('health')) return '💊';
-    if (l.includes('child') || l.includes('school') || l.includes('kid')) return '🧒';
-    return '📦';
-  }
 
   function updateRow(id, field, value) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
@@ -90,21 +112,34 @@ export default function WeeklyForm({ weekStart, weekEnd, onSave, onCancel, exist
     try {
       const data = await onSave(weekStart, entries);
       setResult(data);
-    } catch {
-      // handled by parent
+    } catch (err) {
+      setResult({ status: { color: 'red', label: 'Error', message: err.message || 'Failed to save.' } });
     } finally {
       setLoading(false);
     }
   }
 
   const totalAmount = rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+  const projectedMonthly = (runningMonthlyTotal || 0) + totalAmount;
 
   return (
     <div className="space-y-5">
       {/* Week label */}
-      <div className="p-4 rounded-xl bg-[#01411C]/5 border border-[#01411C]/10 text-center">
-        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-0.5">Logging for</p>
-        <p className="text-base font-bold text-foreground">{formatWeekLabel(weekStart, weekEnd)}</p>
+      <div className="p-4 rounded-xl bg-[#01411C]/5 border border-[#01411C]/10">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-0.5">
+              Logging for Week {weekNumber || '?'} of 4
+            </p>
+            <p className="text-base font-bold text-foreground">{formatWeekLabel(weekStart, weekEnd)}</p>
+          </div>
+          {weeklyBudget > 0 && (
+            <div className="text-right">
+              <p className="text-[11px] text-muted-foreground">Weekly Budget</p>
+              <p className="text-sm font-bold text-[#01411C]">{formatPKR(weeklyBudget)}</p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Entry rows */}
@@ -124,7 +159,14 @@ export default function WeeklyForm({ weekStart, weekEnd, onSave, onCancel, exist
                            focus:border-[#01411C] focus:ring-1 focus:ring-[#01411C]/20 transition-colors"
               />
             ) : (
-              <span className="w-28 sm:w-36 text-sm font-medium text-foreground truncate">{row.label}</span>
+              <div className="w-28 sm:w-36 truncate">
+                <span className="text-sm font-medium text-foreground">{row.label}</span>
+                {row.monthlyRef > 0 && (
+                  <p className="text-[10px] text-muted-foreground leading-tight">
+                    Budget: {formatPKR(Math.round(row.monthlyRef / 4))}/wk
+                  </p>
+                )}
+              </div>
             )}
 
             {/* Amount */}
@@ -142,8 +184,8 @@ export default function WeeklyForm({ weekStart, weekEnd, onSave, onCancel, exist
               />
             </div>
 
-            {/* Remove (only for non-default or custom) */}
-            {(row.id.startsWith('custom_') || rows.length > 1) && (
+            {/* Remove */}
+            {rows.length > 1 && (
               <button
                 onClick={() => removeRow(row.id)}
                 className="w-8 h-8 shrink-0 flex items-center justify-center text-muted-foreground
@@ -166,27 +208,64 @@ export default function WeeklyForm({ weekStart, weekEnd, onSave, onCancel, exist
       </button>
 
       {/* Running total */}
-      <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50 border border-border/60">
-        <span className="text-sm font-semibold text-foreground">This Week's Total</span>
-        <span className="text-lg font-bold text-foreground">PKR {totalAmount.toLocaleString()}</span>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50 border border-border/60">
+          <span className="text-sm font-semibold text-foreground">This Week's Total</span>
+          <span className={`text-lg font-bold ${totalAmount > (weeklyBudget || Infinity) ? 'text-red-600' : 'text-foreground'}`}>
+            {formatPKR(totalAmount)}
+          </span>
+        </div>
+
+        {/* Monthly progress bar */}
+        {monthlyBudget > 0 && (
+          <div className="p-4 rounded-xl bg-gray-50 border border-border/60 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Monthly Progress</span>
+              <span className="font-semibold text-foreground">
+                {formatPKR(projectedMonthly)} / {formatPKR(monthlyBudget)}
+              </span>
+            </div>
+            <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  projectedMonthly > monthlyBudget ? 'bg-red-500' :
+                  projectedMonthly > monthlyBudget * 0.75 ? 'bg-amber-500' : 'bg-emerald-500'
+                }`}
+                style={{ width: `${Math.min(100, (projectedMonthly / monthlyBudget) * 100)}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-muted-foreground">
+                Remaining: <span className="font-semibold text-foreground">{formatPKR(Math.max(0, monthlyBudget - projectedMonthly))}</span>
+              </span>
+              <span className="text-muted-foreground">
+                Week {weekNumber}/4
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Post-save result */}
       {result && (
         <div className={`p-4 rounded-xl border text-sm ${
-          result.over_budget
+          result.status?.color === 'red'
             ? 'bg-red-50 border-red-200 text-red-800'
-            : 'bg-green-50 border-green-200 text-green-800'
+            : result.status?.color === 'yellow'
+              ? 'bg-amber-50 border-amber-200 text-amber-800'
+              : 'bg-green-50 border-green-200 text-green-800'
         }`}>
           <p className="font-semibold mb-1">
-            {result.over_budget ? '⚠️ Over Budget' : '✅ Within Budget'}
+            {result.status?.color === 'red' ? '🔴' : result.status?.color === 'yellow' ? '🟡' : '🟢'}{' '}
+            {result.status?.label}
           </p>
-          <p>
-            Weekly total: <strong>PKR {result.weekly_total?.toLocaleString()}</strong>
-            {' '}vs target: <strong>PKR {result.monthly_budget_weekly?.toLocaleString()}</strong>
-          </p>
-          {result.over_budget && (
-            <p className="mt-1 text-xs">Over by PKR {result.over_by?.toLocaleString()}</p>
+          <p>{result.status?.message}</p>
+
+          {result.overspent_deduction && (
+            <div className="mt-2 p-3 rounded-lg bg-red-100 border border-red-300 text-red-900">
+              <p className="font-bold">⚠️ Month-End Deduction</p>
+              <p className="mt-1">{result.overspent_deduction.message}</p>
+            </div>
           )}
         </div>
       )}

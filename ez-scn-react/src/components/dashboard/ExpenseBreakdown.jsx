@@ -7,6 +7,7 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { useLifeHours } from '@/context/LifeHoursContext';
 import MoneyValue from '@/components/shared/MoneyValue';
+import { formatPKR, safePct } from '@/utils/formatters';
 
 const CATEGORY_ICONS = {
   'Housing': '🏠', 'Utility Bills': '💡', 'Grocery': '🛒',
@@ -82,7 +83,7 @@ export default function ExpenseBreakdown({ breakdown }) {
         {/* Itemized List */}
         <div className="flex-1 space-y-1.5 overflow-y-auto max-h-[320px] pr-1">
           {data.map((cat, i) => {
-            const pct = grandTotal > 0 ? (cat.total / grandTotal) * 100 : 0;
+            const pct = safePct(cat.total, grandTotal);
             return (
               <button
                 key={cat.parent_id}
@@ -113,7 +114,7 @@ export default function ExpenseBreakdown({ breakdown }) {
                   <p className="text-sm font-semibold text-foreground">
                     <MoneyValue amount={cat.total} />
                   </p>
-                  <p className="text-[11px] text-muted-foreground">{pct.toFixed(1)}%</p>
+                  <p className="text-[11px] text-muted-foreground">{pct}%</p>
                 </div>
               </button>
             );

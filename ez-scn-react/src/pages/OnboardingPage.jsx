@@ -3,7 +3,7 @@
 // ============================================
 
 import { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Coins, ArrowLeft, ArrowRight, Check } from 'lucide-react';
 
@@ -25,9 +25,12 @@ const STEPS = [
 
 export default function OnboardingPage() {
   const navigate = useNavigate();
-  const { accessToken, logout } = useAuth();
-  const [step, setStep] = useState(0);
+  const location = useLocation();
+  const { accessToken, logout, updateUser } = useAuth();
+  const [step, setStep] = useState(location.state?.step || 0);
   const [errors, setErrors] = useState({});
+  const editMode = location.state?.editMode === true;
+  const [saving, setSaving] = useState(false);
 
   // ── Shared onboarding data across all steps ──
   const [data, setData] = useState({
@@ -102,6 +105,84 @@ export default function OnboardingPage() {
     setStep((s) => Math.min(s + 1, STEPS.length - 1));
     setErrors({});
     window.scrollTo(0, 0);
+  }
+
+  // ── Edit mode: save just the current step and go back ──
+  async function handleEditSave() {
+    setSaving(true);
+    try {
+      const headers = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      };
+      const opts = { headers, credentials: 'include' };
+
+      if (step === 0) {
+        // Save work profile only
+        await fetch(`${API_URL}/api/income/work-profile`, {
+          ...opts, method: 'POST',
+          body: JSON.stringify({
+            daily_work_hours: parseFloat(data.daily_work_hours),
+            work_days_per_month: parseInt(data.work_days_per_month, 10),
+            home_address: data.homeAddress || null,
+            office_address: data.officeAddress || null,
+            vehicle_type: data.vehicleType,
+            fuel_type: data.fuelType,
+            vehicle_fuel_avg: parseFloat(data.vehicleFuelAvg) || null,
+          }),
+        });
+      } else if (step === 1) {
+        // Save income sources only
+        const allIncomes = [
+          ...data.fixedIncomes.filter((i) => i.source_name && parseFloat(i.amount) > 0),
+          ...data.variableIncomes.filter((i) => i.source_name && parseFloat(i.amount) > 0),
+        ];
+        for (const income of allIncomes) {
+          await fetch(`${API_URL}/api/income/sources`, {
+            ...opts, method: 'POST',
+            body: JSON.stringify({
+              source_name: income.source_name,
+              amount: parseFloat(income.amount),
+              frequency: income.frequency || 'monthly',
+              income_type: income.income_type || 'fixed',
+              expected_month_day: income.expected_month_day || null,
+              notes: null,
+            }),
+          });
+        }
+      } else if (step === 2) {
+        // Save expenses only
+        const expenseEntries = Object.entries(data.expenses)
+          .filter(([, v]) => v.monthly_amount && parseFloat(v.monthly_amount) > 0)
+          .map(([catId, v]) => ({
+            category_id: catId,
+            monthly_amount: parseFloat(v.monthly_amount),
+            custom_label: v.custom_label || null,
+            area_of_living: data.areaOfLiving || null,
+            grocery_area: data.groceryArea || null,
+            notes: v.notes || null,
+          }));
+        if (expenseEntries.length > 0) {
+          await fetch(`${API_URL}/api/expenses/bulk`, {
+            ...opts, method: 'POST',
+            body: JSON.stringify({ expenses: expenseEntries }),
+          });
+        }
+        for (const ce of data.customExpenses) {
+          if (ce.label && parseFloat(ce.amount) > 0) {
+            await fetch(`${API_URL}/api/expenses/custom`, {
+              ...opts, method: 'POST',
+              body: JSON.stringify({ custom_label: ce.label, monthly_amount: parseFloat(ce.amount), notes: null }),
+            });
+          }
+        }
+      }
+      navigate('/settings');
+    } catch (error) {
+      console.error('Edit save error:', error);
+    } finally {
+      setSaving(false);
+    }
   }
 
   // ── Final submission ──
@@ -209,6 +290,8 @@ export default function OnboardingPage() {
         }),
       });
 
+      // Update context and break loop
+      updateUser({ profile_complete: true });
       navigate('/dashboard');
     } catch (error) {
       console.error('Onboarding submission error:', error);
@@ -233,12 +316,12 @@ export default function OnboardingPage() {
       {/* ── Header ── */}
       <header className="border-b border-border/60 bg-white/80 backdrop-blur-sm sticky top-0 z-30">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <Link to="/dashboard" className="flex items-center gap-2 cursor-pointer">
             <div className="w-8 h-8 rounded-lg bg-[#01411C] flex items-center justify-center">
               <Coins className="w-4 h-4 text-white" />
             </div>
             <span className="text-lg font-bold text-[#01411C]">PennyWise</span>
-          </div>
+          </Link>
           <span className="text-xs text-muted-foreground">
             Step {step + 1} of {STEPS.length}
           </span>
@@ -299,17 +382,17 @@ export default function OnboardingPage() {
         {/* ── Navigation ── */}
         <div className="flex items-center justify-between mt-8 pt-6 border-t border-border/60">
           <button
-            onClick={step === 0 ? () => navigate('/login') : handleBack}
+            onClick={editMode ? () => navigate('/settings') : (step === 0 ? () => navigate('/login') : handleBack)}
             className="h-10 px-5 rounded-xl border border-border text-sm font-medium
                        text-foreground hover:bg-gray-50 transition-colors cursor-pointer
                        flex items-center gap-1.5"
           >
             <ArrowLeft className="w-4 h-4" />
-            {step === 0 ? 'Exit' : 'Back'}
+            {editMode ? 'Cancel' : (step === 0 ? 'Exit' : 'Back')}
           </button>
 
           <div className="flex items-center gap-3">
-            {(step === 2 || step === 3) && (
+            {!editMode && (step === 2 || step === 3) && (
               <button
                 onClick={handleSkip}
                 className="h-10 px-5 rounded-xl text-sm font-medium text-muted-foreground
@@ -319,7 +402,19 @@ export default function OnboardingPage() {
               </button>
             )}
 
-            {step < STEPS.length - 1 ? (
+            {editMode ? (
+              <button
+                onClick={handleEditSave}
+                disabled={saving}
+                className="h-10 px-6 rounded-xl bg-[#01411C] text-white text-sm font-medium
+                           hover:bg-[#026b2e] transition-colors cursor-pointer
+                           shadow-sm shadow-[#01411C]/20 flex items-center gap-1.5
+                           disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : 'Save Changes'}
+                <Check className="w-4 h-4" />
+              </button>
+            ) : step < STEPS.length - 1 ? (
               <button
                 onClick={handleNext}
                 className="h-10 px-6 rounded-xl bg-[#01411C] text-white text-sm font-medium

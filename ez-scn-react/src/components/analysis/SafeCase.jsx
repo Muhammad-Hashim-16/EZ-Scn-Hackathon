@@ -3,6 +3,7 @@ import SixMonthProjection from './SixMonthProjection';
 import SixMonthChart from './SixMonthChart';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Sparkles, CheckCircle, TrendingUp } from 'lucide-react';
+import { formatPKR } from '@/utils/formatters';
 
 export default function SafeCase({ analysis }) {
   // Filter out 0 amounts and sort for the chart
@@ -57,7 +58,7 @@ export default function SafeCase({ analysis }) {
 
           <div className="p-5 rounded-2xl border border-border/60 bg-white shadow-sm">
             <h3 className="text-sm font-semibold text-foreground mb-1">Expense Breakdown</h3>
-            <p className="text-xs text-muted-foreground mb-4">Total Expenses: PKR {analysis.total_expenses.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground mb-4">Total Expenses: {formatPKR(analysis.total_expenses)}</p>
             
             <div className="h-48 w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -77,7 +78,7 @@ export default function SafeCase({ analysis }) {
                     ))}
                   </Pie>
                   <Tooltip 
-                    formatter={(value) => `PKR ${value.toLocaleString()}`}
+                    formatter={(value) => formatPKR(value)}
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   />
                 </PieChart>
@@ -86,7 +87,7 @@ export default function SafeCase({ analysis }) {
           </div>
         </div>
 
-        {/* Right Column: Optimization & Projection */}
+        {/* Right Column: Optimization */}
         <div className="space-y-6">
           {analysis.recommendations.length > 0 && (
             <div className="p-5 rounded-2xl border border-amber-200 bg-amber-50 shadow-sm">
@@ -99,18 +100,19 @@ export default function SafeCase({ analysis }) {
               </p>
             </div>
           )}
-
-          <SixMonthChart
-            netSavings={analysis.net_savings}
-            inflationRate={analysis.inflation_rate}
-          />
-
-          <SixMonthProjection 
-            projection={analysis.six_month_projection} 
-            inflationRate={analysis.inflation_rate} 
-          />
         </div>
       </div>
+
+      {/* Full-width: 6-Month Projection */}
+      <SixMonthChart
+        netSavings={analysis.net_savings}
+        inflationRate={analysis.inflation_rate}
+      />
+
+      <SixMonthProjection 
+        projection={analysis.six_month_projection} 
+        inflationRate={analysis.inflation_rate} 
+      />
     </div>
   );
 }

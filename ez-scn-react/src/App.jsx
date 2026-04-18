@@ -2,15 +2,21 @@
 // PennyWise — App Root with Routing
 // ============================================
 
+import { useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
+import { configureApi } from '@/services/api';
+import ErrorBoundary from '@/components/shared/ErrorBoundary';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import DashboardPage from '@/pages/DashboardPage';
 import OnboardingPage from '@/pages/OnboardingPage';
+import ForgotPasswordPage from '@/pages/ForgotPasswordPage';
 import AnalysisPage from '@/pages/AnalysisPage';
 import GoalsPage from '@/pages/GoalsPage';
 import WeeklyTrackerPage from '@/pages/WeeklyTrackerPage';
+import SettingsPage from '@/pages/SettingsPage';
 import TermsPage from '@/pages/TermsPage';
 import PrivacyPage from '@/pages/PrivacyPage';
 import AppLayout from '@/components/layout/AppLayout';
@@ -65,33 +71,44 @@ function GuestRoute({ children }) {
 }
 
 function App() {
+  const toast = useToast();
+  const { logout } = useAuth();
+
+  // Wire toast + logout into the API interceptor (once)
+  useEffect(() => {
+    configureApi({ toast, logout });
+  }, [toast, logout]);
+
   return (
     <>
-      <Routes>
-        {/* ── Guest routes (login / register) ── */}
-        <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
-        <Route path="/register" element={<GuestRoute><RegisterPage /></GuestRoute>} />
+      <ErrorBoundary>
+        <Routes>
+          {/* ── Guest routes (login / register) ── */}
+          <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
+          <Route path="/register" element={<GuestRoute><RegisterPage /></GuestRoute>} />
 
-        {/* ── Public routes (no auth required) ── */}
-        <Route path="/terms" element={<TermsPage />} />
-        <Route path="/privacy" element={<PrivacyPage />} />
+          {/* ── Public routes (no auth required) ── */}
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/forgot-password" element={<GuestRoute><ForgotPasswordPage /></GuestRoute>} />
 
-        {/* ── Onboarding (protected, no layout, allow incomplete profile) ── */}
-        <Route path="/onboarding" element={<ProtectedRoute allowIncomplete><OnboardingPage /></ProtectedRoute>} />
+          {/* ── Onboarding (protected, no layout, allow incomplete profile) ── */}
+          <Route path="/onboarding" element={<ProtectedRoute allowIncomplete><OnboardingPage /></ProtectedRoute>} />
 
-        {/* ── Protected routes inside AppLayout (sidebar / bottom nav) ── */}
-        <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/analysis" element={<AnalysisPage />} />
-          <Route path="/goals" element={<GoalsPage />} />
-          <Route path="/weekly" element={<WeeklyTrackerPage />} />
-          <Route path="/settings" element={<div className="p-6"><h1 className="text-2xl font-bold">Settings</h1><p className="text-muted-foreground mt-2">Coming soon.</p></div>} />
-        </Route>
+          {/* ── Protected routes inside AppLayout (sidebar / bottom nav) ── */}
+          <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+            <Route path="/dashboard" element={<ErrorBoundary><DashboardPage /></ErrorBoundary>} />
+            <Route path="/analysis" element={<ErrorBoundary><AnalysisPage /></ErrorBoundary>} />
+            <Route path="/goals" element={<ErrorBoundary><GoalsPage /></ErrorBoundary>} />
+            <Route path="/weekly" element={<ErrorBoundary><WeeklyTrackerPage /></ErrorBoundary>} />
+            <Route path="/settings" element={<ErrorBoundary><SettingsPage /></ErrorBoundary>} />
+          </Route>
 
-        {/* ── Default redirect ── */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
+          {/* ── Default redirect ── */}
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </ErrorBoundary>
 
       {/* Global cookie consent — appears on all pages */}
       <CookieConsent />

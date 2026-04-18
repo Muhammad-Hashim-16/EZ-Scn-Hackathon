@@ -11,6 +11,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts';
 import { TrendingDown, Info } from 'lucide-react';
+import { formatPKR } from '@/utils/formatters';
 
 const MONTH_LABELS = ['Now', '+1 mo', '+2 mo', '+3 mo', '+4 mo', '+5 mo', '+6 mo'];
 
@@ -25,7 +26,7 @@ export default function SixMonthChart({ netSavings, inflationRate }) {
   // Build data points
   const data = Array.from({ length: 7 }, (_, i) => {
     const nominal = savings;
-    const realValue = Math.round(savings / Math.pow(1 + monthlyRate, i));
+    const realValue = Math.round(savings * Math.pow(1 - monthlyRate, i));
     const loss = nominal - realValue;
     return {
       month: MONTH_LABELS[i],
@@ -48,7 +49,7 @@ export default function SixMonthChart({ netSavings, inflationRate }) {
           <div key={i} className="flex items-center gap-2 py-0.5">
             <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
             <span className="text-muted-foreground">{entry.name}:</span>
-            <span className="font-semibold text-foreground">PKR {entry.value.toLocaleString()}</span>
+            <span className="font-semibold text-foreground">{formatPKR(entry.value)}</span>
           </div>
         ))}
       </div>
@@ -98,7 +99,7 @@ export default function SixMonthChart({ netSavings, inflationRate }) {
               fontSize={11}
               tickLine={false}
               axisLine={false}
-              tickFormatter={(val) => `${(val / 1000).toFixed(0)}k`}
+              tickFormatter={(val) => `${Math.round(val / 1000)}k`}
               domain={['auto', 'auto']}
             />
 
@@ -140,9 +141,9 @@ export default function SixMonthChart({ netSavings, inflationRate }) {
       {/* Summary */}
       <div className="p-4 rounded-xl bg-gradient-to-r from-red-50 to-amber-50 border border-red-100">
         <p className="text-sm text-gray-800 leading-relaxed">
-          In 6 months, your <strong className="text-foreground">PKR {savings.toLocaleString()}</strong> savings
-          will only buy what <strong className="text-[#01411C]">PKR {finalReal.toLocaleString()}</strong> buys
-          today — a loss of <strong className="text-red-600">PKR {totalLoss.toLocaleString()}</strong> in
+          In 6 months, your <strong className="text-foreground">{formatPKR(savings)}</strong> savings
+          will only buy what <strong className="text-[#01411C]">{formatPKR(finalReal)}</strong> buys
+          today — a loss of <strong className="text-red-600">{formatPKR(totalLoss)}</strong> in
           purchasing power.
         </p>
       </div>

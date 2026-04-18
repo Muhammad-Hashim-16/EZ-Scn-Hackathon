@@ -4,6 +4,7 @@
 
 import { useState } from 'react';
 import { X, Target, AlertTriangle } from 'lucide-react';
+import { formatPKR } from '@/utils/formatters';
 
 export default function AddGoalModal({ open, onClose, onSave, netSavings }) {
   const [goalName, setGoalName] = useState('');
@@ -127,13 +128,13 @@ export default function AddGoalModal({ open, onClose, onSave, netSavings }) {
                 : 'bg-amber-50 border-amber-200 text-amber-800'
             }`}>
               <p className="font-semibold mb-1">
-                Monthly saving needed: PKR {monthlyNeeded.toLocaleString()}
+                Monthly saving needed: {formatPKR(monthlyNeeded)}
               </p>
               {!isAchievable && netSavings > 0 && (
                 <div className="flex items-start gap-2 mt-2">
                   <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                   <p className="text-xs leading-relaxed">
-                    Your current net savings are PKR {Math.round(netSavings).toLocaleString()}/mo.
+                    Your current net savings are {formatPKR(Math.round(netSavings))}/mo.
                     At your current rate, you'd need <strong>{revisedMonths} months</strong> instead.
                   </p>
                 </div>

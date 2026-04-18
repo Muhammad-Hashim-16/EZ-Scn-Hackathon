@@ -117,3 +117,15 @@
   animation: moneyFlip 0.3s ease-out forwards;
 }
 
+/* ── Skeleton shimmer effect ── */
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* ── Toast slide-up animation ── */
+@keyframes slideUp {
+  0%   { opacity: 0; transform: translateY(16px) scale(0.96); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+

@@ -4,6 +4,7 @@
 // ============================================
 
 import { BarChart3 } from 'lucide-react';
+import { formatPKR } from '@/utils/formatters';
 
 function formatWeekDates(start, end) {
   const s = new Date(start);
@@ -50,13 +51,13 @@ export default function WeeklyHistory({ weeks, weeklyBudget }) {
               </div>
               <div className="text-right">
                 <p className={`text-lg font-bold ${overBudget ? 'text-red-600' : 'text-foreground'}`}>
-                  PKR {week.total.toLocaleString()}
+                  {formatPKR(week.total)}
                 </p>
                 {weeklyBudget > 0 && (
                   <p className={`text-[11px] font-medium ${overBudget ? 'text-red-500' : 'text-green-600'}`}>
                     {overBudget
-                      ? `↑ PKR ${(week.total - weeklyBudget).toLocaleString()} over`
-                      : `✓ PKR ${(weeklyBudget - week.total).toLocaleString()} under`
+                      ? `↑ ${formatPKR(week.total - weeklyBudget)} over`
+                      : `✓ ${formatPKR(weeklyBudget - week.total)} under`
                     }
                   </p>
                 )}
@@ -76,7 +77,7 @@ export default function WeeklyHistory({ weeks, weeklyBudget }) {
                 <div
                   className="absolute top-0 bottom-0 w-0.5 bg-gray-800/40"
                   style={{ left: `${Math.min(budgetPct, 100)}%` }}
-                  title={`Budget: PKR ${weeklyBudget.toLocaleString()}`}
+                  title={`Budget: ${formatPKR(weeklyBudget)}`}
                 />
               )}
             </div>
@@ -89,7 +90,7 @@ export default function WeeklyHistory({ weeks, weeklyBudget }) {
                     key={j}
                     className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-muted-foreground"
                   >
-                    {e.category_name}: PKR {e.amount.toLocaleString()}
+                    {e.category_name}: {formatPKR(e.amount)}
                   </span>
                 ))}
                 {week.entries.length > 5 && (

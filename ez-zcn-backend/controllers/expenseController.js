@@ -162,6 +162,9 @@ async function bulkUpsertExpenses(req, res) {
         savedExpenses.push(result.rows[0]);
       }
 
+      // ── Calculate and store category percentages ──
+      await recalcPercentages(client, userId);
+
       await client.query('COMMIT');
 
       // Fetch saved expenses with category names
@@ -359,6 +362,9 @@ async function updateExpense(req, res) {
       });
     }
 
+    // Recalculate all category percentages since amounts changed
+    await recalcPercentages(db, userId);
+
     return res.status(200).json({
       success: true,
       expense: result.rows[0],
@@ -444,6 +450,186 @@ async function addCustomExpense(req, res) {
   }
 }
 
+// ============================================
+// Helper: recalculate all category_percentage
+// values for a user based on current amounts.
+// `conn` can be a client (inside txn) or db.
+// ============================================
+async function recalcPercentages(conn, userId) {
+  // Ensure column exists (idempotent)
+  try {
+    await conn.query(
+      `ALTER TABLE user_expenses ADD COLUMN IF NOT EXISTS category_percentage DECIMAL(8,4)`
+    );
+  } catch { /* already exists */ }
+
+  const totalResult = await conn.query(
+    `SELECT SUM(monthly_amount) AS total FROM user_expenses WHERE user_id = $1 AND is_active = TRUE`,
+    [userId]
+  );
+  const total = parseFloat(totalResult.rows[0].total) || 0;
+
+  if (total > 0) {
+    await conn.query(
+      `UPDATE user_expenses
+       SET category_percentage = ROUND((monthly_amount / $1) * 100, 4)
+       WHERE user_id = $2 AND is_active = TRUE`,
+      [total, userId]
+    );
+  } else {
+    await conn.query(
+      `UPDATE user_expenses SET category_percentage = 0 WHERE user_id = $1 AND is_active = TRUE`,
+      [userId]
+    );
+  }
+}
+
+// ============================================
+// POST /api/expenses/redistribute
+// Proportionally redistribute all active
+// expenses to match a new total amount.
+// ============================================
+async function redistributeExpenses(req, res) {
+  try {
+    const userId = req.user.id;
+    const { new_total_expenses } = req.body;
+
+    const newTotal = parseFloat(new_total_expenses);
+    if (!newTotal || newTotal <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'new_total_expenses must be greater than 0.',
+        code: 'VALIDATION_ERROR',
+      });
+    }
+
+    // Ensure column exists
+    try {
+      await db.query(
+        `ALTER TABLE user_expenses ADD COLUMN IF NOT EXISTS category_percentage DECIMAL(8,4)`
+      );
+    } catch { /* */ }
+
+    // Fetch all active expenses
+    const expResult = await db.query(
+      `SELECT ue.id, ue.monthly_amount, ue.category_percentage,
+              ue.custom_label, ec.category_name
+       FROM user_expenses ue
+       LEFT JOIN expense_categories ec ON ue.category_id = ec.id
+       WHERE ue.user_id = $1 AND ue.is_active = TRUE
+       ORDER BY ue.monthly_amount DESC`,
+      [userId]
+    );
+
+    if (expResult.rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No expenses found to redistribute. Add expenses first.',
+        code: 'NO_EXPENSES',
+      });
+    }
+
+    // Edge case 5: if any row has null percentage, recalculate from current amounts
+    const hasNullPct = expResult.rows.some((r) => r.category_percentage == null);
+    if (hasNullPct) {
+      await recalcPercentages(db, userId);
+      // Re-fetch
+      const refreshed = await db.query(
+        `SELECT ue.id, ue.monthly_amount, ue.category_percentage,
+                ue.custom_label, ec.category_name
+         FROM user_expenses ue
+         LEFT JOIN expense_categories ec ON ue.category_id = ec.id
+         WHERE ue.user_id = $1 AND ue.is_active = TRUE
+         ORDER BY ue.monthly_amount DESC`,
+        [userId]
+      );
+      expResult.rows = refreshed.rows;
+    }
+
+    // Calculate new amounts using stored percentages
+    const updates = expResult.rows.map((row) => {
+      const pct = parseFloat(row.category_percentage) || 0;
+      return {
+        id: row.id,
+        category_name: row.category_name || row.custom_label || 'Other',
+        old_amount: parseFloat(row.monthly_amount),
+        new_amount: Math.round((pct / 100) * newTotal),
+        category_percentage: pct,
+      };
+    });
+
+    // Edge case 1: rounding fix — adjust largest category
+    const runningSum = updates.reduce((s, u) => s + u.new_amount, 0);
+    const roundingDiff = Math.round(newTotal) - runningSum;
+    if (roundingDiff !== 0 && updates.length > 0) {
+      // Find the largest category
+      let largestIdx = 0;
+      for (let i = 1; i < updates.length; i++) {
+        if (updates[i].new_amount > updates[largestIdx].new_amount) {
+          largestIdx = i;
+        }
+      }
+      updates[largestIdx].new_amount += roundingDiff;
+    }
+
+    // Apply updates to database
+    for (const u of updates) {
+      await db.query(
+        `UPDATE user_expenses SET monthly_amount = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3`,
+        [u.new_amount, u.id, userId]
+      );
+    }
+
+    // Update current month's monthly_record
+    const monthStr = (() => {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    })();
+
+    // Get current income to recalculate net
+    const recResult = await db.query(
+      `SELECT income, cumulative_savings FROM monthly_records WHERE user_id = $1 AND month = $2`,
+      [userId, monthStr]
+    );
+
+    if (recResult.rows.length > 0) {
+      const currentIncome = parseFloat(recResult.rows[0].income) || 0;
+      const newNet = currentIncome - newTotal;
+
+      // Get previous cumulative
+      const prevRecord = await db.query(
+        `SELECT cumulative_savings FROM monthly_records
+         WHERE user_id = $1 AND month < $2 ORDER BY month DESC LIMIT 1`,
+        [userId, monthStr]
+      );
+      const prevCumulative = prevRecord.rows.length > 0
+        ? parseFloat(prevRecord.rows[0].cumulative_savings) || 0
+        : 0;
+      const newCumulative = prevCumulative + newNet;
+
+      await db.query(
+        `UPDATE monthly_records
+         SET expected_expenses = $3, monthly_net = $4, cumulative_savings = $5
+         WHERE user_id = $1 AND month = $2`,
+        [userId, monthStr, newTotal, newNet, newCumulative]
+      );
+    }
+
+    return res.status(200).json({
+      success: true,
+      new_total: Math.round(newTotal),
+      updated_expenses: updates,
+    });
+  } catch (error) {
+    console.error('Expense Controller — redistributeExpenses error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Internal server error.',
+      code: 'SERVER_ERROR',
+    });
+  }
+}
+
 module.exports = {
   getCategories,
   bulkUpsertExpenses,
@@ -451,4 +637,5 @@ module.exports = {
   updateExpense,
   deleteExpense,
   addCustomExpense,
+  redistributeExpenses,
 };

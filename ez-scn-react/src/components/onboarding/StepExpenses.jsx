@@ -4,18 +4,18 @@
 
 import { useState, useEffect } from 'react';
 import { ChevronDown, Plus, X, Loader2 } from 'lucide-react';
+import { formatPKR } from '@/utils/formatters';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
-const AREA_OPTIONS = ['DHA', 'Gulberg', 'Johar Town', 'F-7', 'G-9', 'Saddar', 'North Nazimabad', 'Pechs', 'Other'];
-const GROCERY_AREAS = ['Local Market', 'Carrefour', 'Imtiaz', 'Metro', 'Online', 'Mixed'];
+
 const VEHICLE_TYPES = ['car', 'motorcycle', 'public', 'wfh'];
 const FUEL_TYPES = ['petrol', 'diesel', 'cng', 'electric'];
 
 // Map parent category names to icons (emoji for simplicity while keeping bundle small)
 const CATEGORY_ICONS = {
   'Housing': '🏠', 'Utility Bills': '💡', 'Grocery & Household Supplies': '🛒',
-  'Fuel & Transport': '⛽', "Children's Expenses": '👶', 'Health': '🏥',
+  'Fuel & Transport': '⛽', "Children": '👶', 'Health': '🏥',
   'Insurance': '🛡️', 'Household Help': '👩‍🍳', 'Subscriptions & Entertainment': '📺',
   'Debt Repayments': '💳', 'Committee (Rotating Savings)': '🤝',
   'Clothing & Personal Care': '👔', 'Social & Religious': '🕌', 'Custom Expenses': '✏️',
@@ -100,7 +100,7 @@ export default function StepExpenses({ data, updateData, accessToken }) {
 
   // Determine which categories to show
   const visibleCategories = categories.filter((cat) => {
-    if (cat.category_name === "Children's Expenses" && !data.hasChildren) return false;
+    if (cat.category_name === "Children" && !data.hasChildren) return false;
     if (cat.category_name === 'Custom Expenses') return false; // rendered separately
     return true;
   });
@@ -131,8 +131,7 @@ export default function StepExpenses({ data, updateData, accessToken }) {
       {visibleCategories.map((category) => {
         const isOpen = expanded[category.id];
         const total = parentTotal(category);
-        const isHousing = category.category_name === 'Housing';
-        const isGrocery = category.category_name.startsWith('Grocery');
+
         const isFuel = category.category_name.startsWith('Fuel');
         const icon = CATEGORY_ICONS[category.category_name] || '📦';
 
@@ -153,7 +152,7 @@ export default function StepExpenses({ data, updateData, accessToken }) {
               <div className="flex items-center gap-3">
                 {total > 0 && (
                   <span className="text-xs font-semibold text-[#01411C] bg-[#01411C]/10 px-2.5 py-1 rounded-lg">
-                    PKR {total.toLocaleString()}
+                    {formatPKR(total)}
                   </span>
                 )}
                 <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
@@ -163,101 +162,8 @@ export default function StepExpenses({ data, updateData, accessToken }) {
             {/* Accordion Body */}
             {isOpen && (
               <div className="px-4 pb-4 space-y-3 border-t border-border/40">
-                {/* Special: Housing area dropdown */}
-                {isHousing && (
-                  <div className="pt-3">
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">Area of Living</label>
-                    <select
-                      value={data.areaOfLiving}
-                      onChange={(e) => updateData({ areaOfLiving: e.target.value })}
-                      className="w-full h-9 px-3 rounded-lg border border-input bg-white text-sm
-                                 focus:outline-none focus:ring-2 focus:ring-[#01411C]/20 focus:border-[#01411C] cursor-pointer"
-                    >
-                      <option value="">Select area</option>
-                      {AREA_OPTIONS.map((a) => <option key={a} value={a}>{a}</option>)}
-                    </select>
-                  </div>
-                )}
 
-                {/* Special: Grocery area dropdown */}
-                {isGrocery && (
-                  <div className="pt-3">
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">Grocery Shopping Area</label>
-                    <select
-                      value={data.groceryArea}
-                      onChange={(e) => updateData({ groceryArea: e.target.value })}
-                      className="w-full h-9 px-3 rounded-lg border border-input bg-white text-sm
-                                 focus:outline-none focus:ring-2 focus:ring-[#01411C]/20 focus:border-[#01411C] cursor-pointer"
-                    >
-                      <option value="">Select area</option>
-                      {GROCERY_AREAS.map((a) => <option key={a} value={a}>{a}</option>)}
-                    </select>
-                  </div>
-                )}
-
-                {/* Special: Fuel & Transport selectors */}
-                {isFuel && (
-                  <div className="pt-3 space-y-3">
-                    <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">Home Address</label>
-                      <input
-                        type="text"
-                        value={data.homeAddress}
-                        onChange={(e) => updateData({ homeAddress: e.target.value })}
-                        placeholder="Enter home address"
-                        className="w-full h-9 px-3 rounded-lg border border-input bg-white text-sm
-                                   focus:outline-none focus:ring-2 focus:ring-[#01411C]/20 focus:border-[#01411C]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">Office Address</label>
-                      <input
-                        type="text"
-                        value={data.officeAddress}
-                        onChange={(e) => updateData({ officeAddress: e.target.value })}
-                        placeholder="Enter work/office address"
-                        className="w-full h-9 px-3 rounded-lg border border-input bg-white text-sm
-                                   focus:outline-none focus:ring-2 focus:ring-[#01411C]/20 focus:border-[#01411C]"
-                      />
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="block text-xs font-medium text-muted-foreground mb-1">Vehicle</label>
-                        <select
-                          value={data.vehicleType}
-                          onChange={(e) => updateData({ vehicleType: e.target.value })}
-                          className="w-full h-9 px-2 rounded-lg border border-input bg-white text-xs
-                                     focus:outline-none focus:ring-2 focus:ring-[#01411C]/20 cursor-pointer"
-                        >
-                          {VEHICLE_TYPES.map((v) => <option key={v} value={v}>{v}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-muted-foreground mb-1">Fuel</label>
-                        <select
-                          value={data.fuelType}
-                          onChange={(e) => updateData({ fuelType: e.target.value })}
-                          className="w-full h-9 px-2 rounded-lg border border-input bg-white text-xs
-                                     focus:outline-none focus:ring-2 focus:ring-[#01411C]/20 cursor-pointer"
-                        >
-                          {FUEL_TYPES.map((f) => <option key={f} value={f}>{f}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-muted-foreground mb-1">km/L avg</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={data.vehicleFuelAvg}
-                          onChange={(e) => updateData({ vehicleFuelAvg: e.target.value })}
-                          placeholder="12"
-                          className="w-full h-9 px-2 rounded-lg border border-input bg-white text-xs
-                                     focus:outline-none focus:ring-2 focus:ring-[#01411C]/20"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
+                {/* Fuel & Transport selectors have been removed */}
 
                 {/* Sub-category amount inputs */}
                 {category.children.map((sub) => (
@@ -341,7 +247,7 @@ export default function StepExpenses({ data, updateData, accessToken }) {
       {grandTotal > 0 && (
         <div className="p-4 rounded-xl bg-[#01411C]/[0.06] border border-[#01411C]/15">
           <p className="text-xs text-muted-foreground">Estimated Total Monthly Expenses</p>
-          <p className="text-2xl font-bold text-[#01411C]">PKR {grandTotal.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-[#01411C]">{formatPKR(grandTotal)}</p>
         </div>
       )}
     </div>

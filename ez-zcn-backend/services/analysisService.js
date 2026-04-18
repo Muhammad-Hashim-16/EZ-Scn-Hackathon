@@ -41,8 +41,8 @@ async function analyzeFinances(userId) {
 
   // 1c. Savings goals
   const goalsResult = await db.query(
-    `SELECT id, goal_name, target_amount, current_amount, monthly_deduction,
-            target_date, is_completed
+    `SELECT id, goal_name, target_amount, amount_saved, monthly_deduction,
+            target_date, is_achieved
      FROM savings_goals
      WHERE user_id = $1`,
     [userId]
@@ -117,7 +117,7 @@ async function analyzeFinances(userId) {
   try {
     const inflResult = await db.query(
       `SELECT value FROM inflation_cache
-       WHERE data_type = 'cpi'
+       WHERE data_type = 'inflation_rate'
        ORDER BY fetched_at DESC LIMIT 1`
     );
     if (inflResult.rows.length > 0) {
@@ -340,17 +340,12 @@ async function analyzeFinances(userId) {
     await db.query(
       `INSERT INTO monthly_snapshots (
         user_id, snapshot_month,
-        total_income, total_expenses, total_savings,
-        inflation_rate, savings_rate
-      ) VALUES ($1, date_trunc('month', NOW()), $2, $3, $4, $5, $6)
-      ON CONFLICT (user_id, snapshot_month)
-      DO UPDATE SET
-        total_income = $2,
-        total_expenses = $3,
-        total_savings = $4,
-        inflation_rate = $5,
-        savings_rate = $6`,
-      [userId, totalIncome, totalExpenses, netSavings, annualInflationRate, savingsRate]
+        total_income, total_expenses, net_savings,
+        inflation_rate, savings_rate, health_status,
+        snapshot_data
+      ) VALUES ($1, date_trunc('month', NOW())::date, $2, $3, $4, $5, $6, $7, $8)
+      ON CONFLICT DO NOTHING`,
+      [userId, totalIncome, totalExpenses, netSavings, annualInflationRate, savingsRate, healthStatus, JSON.stringify({ flags, recommendations: recommendations.length })]
     );
   } catch (err) {
     console.error('Analysis Service — snapshot save error:', err.message);
@@ -377,9 +372,9 @@ async function analyzeFinances(userId) {
   let goalScore = 0;
   if (goals.length > 0) {
     const onTrack = goals.filter((g) => {
-      const current = parseFloat(g.current_amount || 0);
+      const current = parseFloat(g.amount_saved || 0);
       const target = parseFloat(g.target_amount || 1);
-      return current / target >= 0.5 || g.is_completed;
+      return current / target >= 0.5 || g.is_achieved;
     });
     goalScore = onTrack.length >= goals.length * 0.5 ? 10 : 5;
   }
@@ -398,9 +393,9 @@ async function analyzeFinances(userId) {
 
   const goalStatus = goals.map((g) => {
     const target = parseFloat(g.target_amount || 0);
-    const current = parseFloat(g.current_amount || 0);
+    const current = parseFloat(g.amount_saved || 0);
     const monthly = parseFloat(g.monthly_deduction || 0);
-    const progress = target > 0 ? round2((current / target) * 100) : 0;
+    const progress = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
     const remaining = Math.max(0, target - current);
     const monthsLeft = monthly > 0 ? Math.ceil(remaining / monthly) : Infinity;
 
@@ -408,13 +403,13 @@ async function analyzeFinances(userId) {
       id: g.id,
       goal_name: g.goal_name,
       target_amount: target,
-      current_amount: current,
+      amount_saved: current,
       monthly_deduction: monthly,
       progress_percent: progress,
       remaining_amount: round2(remaining),
       estimated_months_left: monthsLeft === Infinity ? null : monthsLeft,
-      is_completed: g.is_completed,
-      status: g.is_completed ? 'completed' : progress >= 50 ? 'on_track' : 'behind',
+      is_achieved: g.is_achieved,
+      status: g.is_achieved ? 'achieved' : progress >= 50 ? 'on_track' : 'behind',
     };
   });
 
@@ -533,7 +528,7 @@ async function quickHealth(userId) {
   let realSavings = netSavings;
   try {
     const inflResult = await db.query(
-      `SELECT value FROM inflation_cache WHERE data_type = 'cpi' ORDER BY fetched_at DESC LIMIT 1`
+      `SELECT value FROM inflation_cache WHERE data_type = 'inflation_rate' ORDER BY fetched_at DESC LIMIT 1`
     );
     if (inflResult.rows.length > 0) {
       const monthlyInfl = Math.pow(1 + parseFloat(inflResult.rows[0].value) / 100, 1 / 12) - 1;
@@ -551,7 +546,7 @@ async function quickHealth(userId) {
   // Quick goal check
   const goalsCheck = await db.query(
     `SELECT COUNT(*) AS total,
-            COUNT(*) FILTER (WHERE current_amount::numeric / GREATEST(target_amount::numeric, 1) >= 0.5 OR is_completed) AS on_track
+            COUNT(*) FILTER (WHERE amount_saved::numeric / GREATEST(target_amount::numeric, 1) >= 0.5 OR is_achieved) AS on_track
      FROM savings_goals WHERE user_id = $1`,
     [userId]
   );
@@ -569,11 +564,15 @@ async function quickHealth(userId) {
   let hourlyWage = 0;
   try {
     const wageResult = await db.query(
-      'SELECT hourly_wage FROM work_profiles WHERE user_id = $1 LIMIT 1',
+      'SELECT daily_work_hours, work_days_per_month FROM work_profiles WHERE user_id = $1 LIMIT 1',
       [userId]
     );
     if (wageResult.rows.length > 0) {
-      hourlyWage = parseFloat(wageResult.rows[0].hourly_wage) || 0;
+      const dh = parseFloat(wageResult.rows[0].daily_work_hours) || 0;
+      const dm = parseInt(wageResult.rows[0].work_days_per_month) || 0;
+      if (dh > 0 && dm > 0 && totalIncome > 0) {
+        hourlyWage = round2(totalIncome / (dh * dm));
+      }
     }
   } catch { /* fallback */ }
 

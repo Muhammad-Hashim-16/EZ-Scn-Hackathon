@@ -1,74 +1,49 @@
 // ============================================
-// PennyWise — Goals Page
+// PennyWise — Goals Page (v2)
+// Uses React Query for data fetching
 // ============================================
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { useGoals, useMonthlyRecord, useInvalidate } from '@/hooks/useQueries';
+import LoadingSkeleton from '@/components/shared/LoadingSkeleton';
+import PageError from '@/components/shared/PageError';
+import EmptyState from '@/components/shared/EmptyState';
 import GoalCard from '@/components/goals/GoalCard';
 import AddGoalModal from '@/components/goals/AddGoalModal';
-import { Target, Plus, Sparkles, TrendingUp } from 'lucide-react';
+import { Target, Plus, TrendingUp } from 'lucide-react';
 import MoneyValue from '@/components/shared/MoneyValue';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-
-// ── Skeleton ──
-function GoalsSkeleton() {
-  return (
-    <div className="space-y-4 animate-pulse">
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="h-48 bg-gray-200 rounded-2xl" />
-      ))}
-    </div>
-  );
-}
+import { formatPKR } from '@/utils/formatters';
 
 export default function GoalsPage() {
   const { accessToken } = useAuth();
-  const [goals, setGoals] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  const [netSavings, setNetSavings] = useState(0);
+  const invalidate = useInvalidate();
 
-  // ── Fetch goals ──
-  const fetchGoals = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/goals`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        credentials: 'include',
-      });
-      const data = await res.json();
-      if (data.success) setGoals(data.goals);
-    } catch {
-      // fail silently
-    } finally {
-      setLoading(false);
-    }
-  }, [accessToken]);
+  // React Query hooks
+  const {
+    data: goalsResponse,
+    error: goalsError,
+    isLoading: goalsLoading,
+    refetch: refetchGoals
+  } = useGoals();
 
-  // ── Fetch net savings for achievability check ──
-  const fetchNetSavings = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/analysis/quick-health`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        credentials: 'include',
-      });
-      const data = await res.json();
-      if (data.success) setNetSavings(data.net_savings || 0);
-    } catch {
-      // fallback
-    }
-  }, [accessToken]);
+  const {
+    data: monthlyRecordResponse,
+  } = useMonthlyRecord();
 
-  useEffect(() => {
-    if (accessToken) {
-      fetchGoals();
-      fetchNetSavings();
-    }
-  }, [accessToken, fetchGoals, fetchNetSavings]);
+  const loading = !accessToken || goalsLoading;
+  const goals = goalsResponse?.success ? goalsResponse.goals : [];
+  const cumulativeSavings = goalsResponse?.success
+    ? (goalsResponse.cumulative_savings || 0)
+    : (monthlyRecordResponse?.success ? parseFloat(monthlyRecordResponse.record?.cumulative_savings || 0) : 0);
+
+  const error = goalsError?.message || (!goalsLoading && !goalsResponse?.success && goalsResponse?.error) || null;
+  const errorStatus = goalsError?.status || null;
 
   // ── Create goal ──
   async function handleCreateGoal(goalData) {
-    const res = await fetch(`${API_URL}/api/goals`, {
+    const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/goals`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -79,13 +54,13 @@ export default function GoalsPage() {
     });
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
-    await fetchGoals(); // refresh list
+    invalidate.afterGoalTransfer();
   }
 
-  // ── Contribute ──
-  async function handleContribute(goalId, amount) {
-    const res = await fetch(`${API_URL}/api/goals/${goalId}/contribute`, {
-      method: 'PUT',
+  // ── Transfer from savings to goal ──
+  async function handleTransfer(goalId, amount) {
+    const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/goals/${goalId}/transfer`, {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${accessToken}`,
@@ -94,18 +69,21 @@ export default function GoalsPage() {
       body: JSON.stringify({ amount }),
     });
     const data = await res.json();
-    if (data.success) await fetchGoals();
+    if (!data.success) throw new Error(data.error || 'Transfer failed.');
+    // Invalidate goals + savings across all pages
+    invalidate.afterGoalTransfer();
+    return data;
   }
 
   // ── Delete ──
   async function handleDelete(goalId) {
-    const res = await fetch(`${API_URL}/api/goals/${goalId}`, {
+    const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/goals/${goalId}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${accessToken}` },
       credentials: 'include',
     });
     const data = await res.json();
-    if (data.success) await fetchGoals();
+    if (data.success) invalidate.afterGoalTransfer();
   }
 
   // ── Stats ──
@@ -114,14 +92,24 @@ export default function GoalsPage() {
   const totalSaved = goals.reduce((s, g) => s + g.amount_saved, 0);
   const totalTarget = goals.reduce((s, g) => s + g.target_amount, 0);
 
+  // ── Loading state ──
   if (loading) {
     return (
       <div className="max-w-3xl mx-auto p-4 md:p-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="h-8 w-64 bg-gray-200 rounded-lg animate-pulse" />
-          <div className="h-10 w-36 bg-gray-200 rounded-xl animate-pulse" />
+        <LoadingSkeleton type="goals" />
+      </div>
+    );
+  }
+
+  // ── Error state ──
+  if (error) {
+    return (
+      <div className="max-w-3xl mx-auto p-4 md:p-8">
+        <div className="flex items-center gap-2 mb-6">
+          <Target className="w-6 h-6 text-[#01411C]" />
+          <h1 className="text-2xl font-bold text-foreground">Your Financial Goals 🎯</h1>
         </div>
-        <GoalsSkeleton />
+        <PageError error={error} status={errorStatus} onRetry={() => refetchGoals()} />
       </div>
     );
   }
@@ -147,6 +135,15 @@ export default function GoalsPage() {
         </button>
       </div>
 
+      {/* Available Savings Banner */}
+      <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200 flex items-center justify-between">
+        <div>
+          <p className="text-xs text-emerald-700 font-medium">Available Savings</p>
+          <p className="text-xs text-emerald-600 mt-0.5">Transfer to your goals below</p>
+        </div>
+        <p className="text-xl font-bold text-[#01411C]">{formatPKR(cumulativeSavings)}</p>
+      </div>
+
       {/* Summary Stats */}
       {goals.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -160,7 +157,7 @@ export default function GoalsPage() {
           </div>
           <div className="p-3.5 rounded-xl bg-gray-50 border border-border/40 text-center">
             <p className="text-xl font-bold text-foreground"><MoneyValue amount={totalSaved} /></p>
-            <p className="text-[11px] text-muted-foreground font-medium">Total Saved</p>
+            <p className="text-[11px] text-muted-foreground font-medium">Total Transferred</p>
           </div>
           <div className="p-3.5 rounded-xl bg-gray-50 border border-border/40 text-center">
             <p className="text-xl font-bold text-foreground">
@@ -171,39 +168,15 @@ export default function GoalsPage() {
         </div>
       )}
 
-      {/* Empty state */}
+      {/* ── Empty state ── */}
       {goals.length === 0 && (
-        <div className="flex flex-col items-center justify-center text-center py-16 px-6">
-          <div className="w-20 h-20 rounded-3xl bg-[#01411C]/10 flex items-center justify-center mb-6">
-            <Sparkles className="w-10 h-10 text-[#01411C]" />
-          </div>
-          <h2 className="text-xl font-bold text-foreground mb-2">No Goals Yet</h2>
-          <p className="text-muted-foreground max-w-sm mb-6 leading-relaxed">
-            Set a financial target — whether it's Umrah, a new car, or an emergency fund.
-            PennyWise will track your progress and adjust for inflation.
-          </p>
-          <button
-            onClick={() => setModalOpen(true)}
-            className="flex items-center gap-2 h-11 px-6 bg-[#01411C] text-white text-sm font-semibold
-                       rounded-xl hover:bg-[#026b2e] transition-colors shadow-lg shadow-[#01411C]/20 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" /> Create Your First Goal
-          </button>
-        </div>
-      )}
-
-      {/* Achieved goals */}
-      {achievedGoals.length > 0 && (
-        <div>
-          <h2 className="text-base font-bold text-foreground mb-3 flex items-center gap-2">
-            🎉 Achieved
-          </h2>
-          <div className="space-y-4">
-            {achievedGoals.map((goal) => (
-              <GoalCard key={goal.id} goal={goal} onContribute={handleContribute} onDelete={handleDelete} />
-            ))}
-          </div>
-        </div>
+        <EmptyState
+          icon="🎯"
+          title="No Goals Yet"
+          description="Set a financial target — whether it's Umrah, a new car, or an emergency fund. Transfer from your savings to fund each goal."
+          actionLabel="Create Your First Goal"
+          onAction={() => setModalOpen(true)}
+        />
       )}
 
       {/* Active goals */}
@@ -216,7 +189,33 @@ export default function GoalsPage() {
           )}
           <div className="space-y-4">
             {activeGoals.map((goal) => (
-              <GoalCard key={goal.id} goal={goal} onContribute={handleContribute} onDelete={handleDelete} />
+              <GoalCard
+                key={goal.id}
+                goal={goal}
+                availableSavings={cumulativeSavings}
+                onTransfer={handleTransfer}
+                onDelete={handleDelete}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Achieved goals */}
+      {achievedGoals.length > 0 && (
+        <div>
+          <h2 className="text-base font-bold text-foreground mb-3 flex items-center gap-2">
+            🎉 Achieved
+          </h2>
+          <div className="space-y-4">
+            {achievedGoals.map((goal) => (
+              <GoalCard
+                key={goal.id}
+                goal={goal}
+                availableSavings={cumulativeSavings}
+                onTransfer={handleTransfer}
+                onDelete={handleDelete}
+              />
             ))}
           </div>
         </div>
@@ -227,7 +226,7 @@ export default function GoalsPage() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         onSave={handleCreateGoal}
-        netSavings={netSavings}
+        netSavings={cumulativeSavings}
       />
     </div>
   );

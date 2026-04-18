@@ -8,16 +8,16 @@ import { useState, useEffect } from 'react';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const REFRESH_MS = 30 * 60 * 1000; // 30 minutes
 
-// Fallback data when API is unavailable or loading
+// Fallback data — real PBS Weekly SPI prices (April 2026)
 const FALLBACK_PRICES = [
-  { item: 'Petrol', price: 293, unit: '/L', change: 3, emoji: '⛽' },
-  { item: 'Chicken', price: 380, unit: '/kg', change: -2, emoji: '🐔' },
-  { item: 'Cooking Oil', price: 450, unit: '/L', change: 8, emoji: '🫙' },
-  { item: 'Flour (Atta)', price: 120, unit: '/kg', change: 5, emoji: '🌾' },
-  { item: 'Sugar', price: 145, unit: '/kg', change: -1, emoji: '🍬' },
-  { item: 'Electricity', price: 42, unit: '/kWh', change: 12, emoji: '⚡' },
-  { item: 'Rice (Basmati)', price: 310, unit: '/kg', change: 4, emoji: '🍚' },
-  { item: 'Milk', price: 220, unit: '/L', change: 6, emoji: '🥛' },
+  { item: 'Petrol', price: 252.10, unit: '/L', change: 0, emoji: '⛽' },
+  { item: 'Chicken', price: 478.61, unit: '/kg', change: 1.9, emoji: '🐔' },
+  { item: 'Cooking Oil', price: 555.82, unit: '/L', change: 0.9, emoji: '🫙' },
+  { item: 'Flour (Atta)', price: 118.50, unit: '/kg', change: 0.6, emoji: '🌾' },
+  { item: 'Sugar', price: 146.23, unit: '/kg', change: 0.8, emoji: '🍬' },
+  { item: 'Electricity', price: 44.50, unit: '/kWh', change: 0, emoji: '⚡' },
+  { item: 'Rice (Basmati)', price: 312.40, unit: '/kg', change: 0.8, emoji: '🍚' },
+  { item: 'Milk', price: 220, unit: '/L', change: 0.9, emoji: '🥛' },
 ];
 
 export default function InflationTicker({ accessToken }) {

@@ -13,6 +13,7 @@
 //   convert(amt)     — raw number for charts
 //   unit             — "PKR" or "Hours"
 // ============================================
+import { formatPKR } from '@/utils/formatters';
 
 import { createContext, useContext, useState, useCallback } from 'react';
 
@@ -31,7 +32,7 @@ export function LifeHoursProvider({ children, hourlyWage }) {
     (amount) => {
       const val = parseFloat(amount) || 0;
       const wage = hourlyWage || 0;
-      if (wage <= 0) return '0h 0m';
+      if (wage <= 0) return 'N/A';
 
       const totalMinutes = Math.round((val / wage) * 60);
       const hours = Math.floor(totalMinutes / 60);
@@ -63,7 +64,7 @@ export function LifeHoursProvider({ children, hourlyWage }) {
       if (isLifeHoursMode && hourlyWage > 0) {
         return toLifeHours(val);
       }
-      return `PKR ${val.toLocaleString()}`;
+      return formatPKR(val);
     },
     [isLifeHoursMode, hourlyWage, toLifeHours]
   );

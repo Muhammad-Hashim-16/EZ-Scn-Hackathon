@@ -5,6 +5,7 @@
 import { useLifeHours } from '@/context/LifeHoursContext';
 import { Clock, Banknote, Info } from 'lucide-react';
 import { useState } from 'react';
+import { formatPKR } from '@/utils/formatters';
 
 export default function LifeHoursToggle() {
   const { showHours, toggle, hourlyWage } = useLifeHours();
@@ -67,7 +68,7 @@ export default function LifeHoursToggle() {
                           bg-gray-900 text-white text-xs shadow-xl z-50 animate-fade-in-up">
             <p className="font-semibold mb-1">💡 Life Hours Mode</p>
             <p className="opacity-80 leading-relaxed">
-              1 hour of your work = <strong>PKR {hourlyWage.toLocaleString()}</strong>.
+              1 hour of your work = <strong>{formatPKR(hourlyWage)}</strong>.
               See how many work-hours each expense costs you.
             </p>
             <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0

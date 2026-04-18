@@ -1,38 +1,45 @@
 // ============================================
 // Dashboard — Summary Cards Row
-// Income · Expenses · Net Savings
+// Income · Expected Expenses · Cumulative Savings
 // Uses MoneyValue for animated PKR/Hours switch
 // ============================================
 
 import { TrendingUp, TrendingDown, PiggyBank } from 'lucide-react';
 import MoneyValue from '@/components/shared/MoneyValue';
+import { formatPKR } from '@/utils/formatters';
 
-export default function SummaryCards({ analysis }) {
+export default function SummaryCards({ analysis, monthlyRecord }) {
+  // Prefer monthly record values (cumulative savings),
+  // fall back to analysis values if record hasn't loaded yet
+  const income = monthlyRecord?.income ?? analysis.total_income;
+  const expectedExpenses = monthlyRecord?.expected_expenses ?? analysis.total_expenses;
+  const cumulativeSavings = monthlyRecord?.cumulative_savings ?? analysis.net_savings;
+
   const cards = [
     {
-      label: 'Total Income',
-      value: analysis.total_income,
+      label: 'Income',
+      value: income,
       icon: TrendingUp,
       gradient: 'from-emerald-500 to-green-600',
       iconBg: 'bg-white/20',
     },
     {
-      label: 'Total Expenses',
-      value: analysis.total_expenses,
+      label: 'Expected Expenses',
+      value: expectedExpenses,
       icon: TrendingDown,
       gradient: 'from-rose-500 to-red-600',
       iconBg: 'bg-white/20',
     },
     {
-      label: 'Net Savings',
-      value: analysis.net_savings,
+      label: 'Cumulative Savings',
+      value: cumulativeSavings,
       icon: PiggyBank,
-      gradient: analysis.net_savings >= 0
+      gradient: cumulativeSavings >= 0
         ? 'from-[#01411C] to-emerald-700'
         : 'from-red-700 to-rose-800',
       iconBg: 'bg-white/20',
-      badge: analysis.savings_rate != null
-        ? `${analysis.savings_rate >= 0 ? '+' : ''}${analysis.savings_rate}%`
+      subtitle: monthlyRecord
+        ? `This month: ${formatPKR(monthlyRecord.monthly_net || 0)}`
         : null,
     },
   ];
@@ -64,10 +71,10 @@ export default function SummaryCards({ analysis }) {
                 <MoneyValue amount={card.value} />
               </p>
 
-              {card.badge && (
-                <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/20 backdrop-blur-sm">
-                  Savings Rate: {card.badge}
-                </span>
+              {card.subtitle && (
+                <p className="mt-1.5 text-[11px] font-medium opacity-70">
+                  {card.subtitle}
+                </p>
               )}
             </div>
           </div>

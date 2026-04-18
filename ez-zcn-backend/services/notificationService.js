@@ -333,6 +333,49 @@ async function markAsRead(notificationId, userId) {
   );
 }
 
+// ══════════════════════════════════════════════
+// 9. sendMonthlyCheckInPrompt()
+//    Called on 1st of each month — reminds users
+//    to confirm or update their income/expenses
+// ══════════════════════════════════════════════
+async function sendMonthlyCheckInPrompt() {
+  console.log('🔔 Notification Service — Sending monthly check-in prompts...');
+
+  try {
+    const monthStr = (() => {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    })();
+
+    // Find users who have NOT confirmed the current month
+    const usersResult = await db.query(
+      `SELECT u.id FROM users u
+       WHERE u.notification_enabled = TRUE
+         AND u.onboarding_completed = TRUE
+         AND u.id NOT IN (
+           SELECT user_id FROM monthly_records
+           WHERE month = $1 AND confirmed = TRUE
+         )`,
+      [monthStr]
+    );
+
+    let sent = 0;
+    for (const user of usersResult.rows) {
+      await sendPushNotification(
+        user.id,
+        '📅 New Month, New Check-In',
+        'Is your income and expenses the same as last month? Tap to confirm or update.',
+        '/dashboard'
+      );
+      sent++;
+    }
+
+    console.log(`🔔 Monthly check-in prompts sent to ${sent} users`);
+  } catch (err) {
+    console.error('Notification Service — monthlyCheckIn error:', err.message);
+  }
+}
+
 module.exports = {
   sendPushNotification,
   checkPriceChangesAndNotify,
@@ -342,4 +385,5 @@ module.exports = {
   registerToken,
   getUserNotifications,
   markAsRead,
+  sendMonthlyCheckInPrompt,
 };

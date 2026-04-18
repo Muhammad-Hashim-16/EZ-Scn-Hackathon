@@ -1,118 +1,60 @@
 // ============================================
 // PennyWise — Dashboard Page (Home Screen)
+// Uses React Query for data fetching
 // ============================================
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
+import { useAnalysis, useMonthlyRecord, useOneTimeIncome, useInvalidate } from '@/hooks/useQueries';
+import LoadingSkeleton from '@/components/shared/LoadingSkeleton';
+import PageError from '@/components/shared/PageError';
+import EmptyState from '@/components/shared/EmptyState';
 import SummaryCards from '@/components/dashboard/SummaryCards';
 import LifeHoursToggle from '@/components/dashboard/LifeHoursToggle';
 import ExpenseBreakdown from '@/components/dashboard/ExpenseBreakdown';
 import GoalsPreview from '@/components/dashboard/GoalsPreview';
 import InflationTicker from '@/components/dashboard/InflationTicker';
-import { Bell, Sparkles, ArrowRight } from 'lucide-react';
+import MonthlyCheckInModal from '@/components/dashboard/MonthlyCheckInModal';
+import OneTimeIncomeModal from '@/components/dashboard/OneTimeIncomeModal';
+import OneTimeIncomeList from '@/components/dashboard/OneTimeIncomeList';
+import { Bell, Sparkles, ArrowRight, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-
-// ── Skeleton Loader ──
-function DashboardSkeleton() {
-  return (
-    <div className="space-y-6 animate-pulse">
-      <div className="flex justify-between items-center">
-        <div className="space-y-2">
-          <div className="h-7 w-48 bg-gray-200 rounded-lg" />
-          <div className="h-4 w-32 bg-gray-200 rounded-lg" />
-        </div>
-        <div className="h-10 w-10 bg-gray-200 rounded-full" />
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="h-32 bg-gray-200 rounded-2xl" />
-        ))}
-      </div>
-      <div className="h-10 w-64 bg-gray-200 rounded-full" />
-      <div className="h-80 bg-gray-200 rounded-2xl" />
-      <div className="h-40 bg-gray-200 rounded-2xl" />
-    </div>
-  );
-}
-
-// ── Empty State ──
-function EmptyDashboard() {
-  return (
-    <div className="flex flex-col items-center justify-center text-center py-20 px-6">
-      <div className="w-20 h-20 rounded-3xl bg-[#01411C]/10 flex items-center justify-center mb-6">
-        <Sparkles className="w-10 h-10 text-[#01411C]" />
-      </div>
-      <h2 className="text-2xl font-bold text-foreground mb-2">Welcome to PennyWise!</h2>
-      <p className="text-muted-foreground max-w-sm mb-6 leading-relaxed">
-        Complete your financial setup to see your personalized dashboard with income analysis,
-        expense breakdowns, and savings insights.
-      </p>
-      <Link
-        to="/onboarding"
-        className="inline-flex items-center gap-2 h-11 px-6 rounded-xl bg-[#01411C] text-white text-sm font-semibold
-                   hover:bg-[#026b2e] active:bg-[#012e14] transition-colors shadow-lg shadow-[#01411C]/20"
-      >
-        Complete Setup <ArrowRight className="w-4 h-4" />
-      </Link>
-    </div>
-  );
-}
+import { formatPKR } from '@/utils/formatters';
 
 export default function DashboardPage() {
   const { user, accessToken } = useAuth();
-  const [analysis, setAnalysis] = useState(null);
-  const [quickHealth, setQuickHealth] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [isEmpty, setIsEmpty] = useState(false);
+  const toast = useToast();
+  const navigate = useNavigate();
+  const invalidate = useInvalidate();
 
-  useEffect(() => {
-    async function loadDashboard() {
-      setLoading(true);
-      try {
-        // Fetch quick health (fast) + full analysis in parallel
-        const [healthRes, analysisRes] = await Promise.allSettled([
-          fetch(`${API_URL}/api/analysis/quick-health`, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-            credentials: 'include',
-          }),
-          fetch(`${API_URL}/api/analysis/monthly`, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-            credentials: 'include',
-          }),
-        ]);
+  // React Query hooks
+  const {
+    data: analysisResponse,
+    error: analysisError,
+    isLoading: analysisLoading,
+    refetch: refetchAnalysis
+  } = useAnalysis();
 
-        // Quick health
-        if (healthRes.status === 'fulfilled' && healthRes.value.ok) {
-          const hData = await healthRes.value.json();
-          if (hData.success) setQuickHealth(hData);
-        }
+  const {
+    data: monthlyRecordResponse,
+    refetch: refetchMonthlyRecord
+  } = useMonthlyRecord();
 
-        // Full analysis
-        if (analysisRes.status === 'fulfilled' && analysisRes.value.ok) {
-          const aData = await analysisRes.value.json();
-          if (aData.success && aData.analysis) {
-            setAnalysis(aData.analysis);
-            // Check for empty state (no income entered)
-            if (aData.analysis.total_income === 0 && aData.analysis.total_expenses === 0) {
-              setIsEmpty(true);
-            }
-          } else {
-            setIsEmpty(true);
-          }
-        } else {
-          setIsEmpty(true);
-        }
-      } catch {
-        setIsEmpty(true);
-      } finally {
-        setLoading(false);
-      }
-    }
+  const {
+    data: oneTimeResponse,
+  } = useOneTimeIncome();
 
-    if (accessToken) loadDashboard();
-  }, [accessToken]);
+  const [showOneTimeModal, setShowOneTimeModal] = useState(false);
+
+  const loading = !accessToken || analysisLoading;
+  const analysis = analysisResponse?.success ? analysisResponse.analysis : null;
+  const monthlyRecord = monthlyRecordResponse?.success ? monthlyRecordResponse.record : null;
+  const oneTimeEntries = oneTimeResponse?.success ? oneTimeResponse.entries : [];
+  const error = analysisError?.message || (!analysisLoading && !analysisResponse?.success && analysisResponse?.error) || null;
+  const errorStatus = analysisError?.status || null;
+  const isEmpty = analysis && analysis.total_income === 0 && analysis.total_expenses === 0;
 
   // Current date
   const now = new Date();
@@ -121,37 +63,72 @@ export default function DashboardPage() {
 
   // Health dot color
   let dotColor = 'bg-gray-300';
-  if (quickHealth) {
-    if (quickHealth.health_status === 'safe') dotColor = 'bg-green-500';
-    else if (quickHealth.health_status === 'edge') dotColor = 'bg-yellow-500';
-    else if (quickHealth.health_status === 'red') dotColor = 'bg-red-500';
+  if (analysis) {
+    if (analysis.health_status === 'safe') dotColor = 'bg-green-500';
+    else if (analysis.health_status === 'edge') dotColor = 'bg-yellow-500';
+    else if (analysis.health_status === 'red') dotColor = 'bg-red-500';
   }
 
+  // ── Loading state ──
   if (loading) {
     return (
       <div className="max-w-6xl mx-auto p-4 md:p-8">
-        <DashboardSkeleton />
+        <LoadingSkeleton type="dashboard" />
       </div>
     );
   }
 
-  if (isEmpty && !analysis) {
+  // ── Error state ──
+  if (error && !analysis) {
     return (
       <div className="max-w-6xl mx-auto p-4 md:p-8">
-        {/* Top bar even on empty state */}
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Hello {firstName} 👋</h1>
             <p className="text-sm text-muted-foreground mt-0.5">{monthYear}</p>
           </div>
         </div>
-        <EmptyDashboard />
+        <PageError error={error} status={errorStatus} onRetry={() => { refetchAnalysis(); refetchMonthlyRecord(); }} />
       </div>
     );
   }
 
+  // ── Empty state ──
+  if (isEmpty && !analysis) {
+    return (
+      <div className="max-w-6xl mx-auto p-4 md:p-8">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Hello {firstName} 👋</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">{monthYear}</p>
+          </div>
+        </div>
+        <EmptyState
+          icon={Sparkles}
+          title="Welcome to PennyWise!"
+          description="Complete your financial setup to see your personalized dashboard with income analysis, expense breakdowns, and savings insights."
+          actionLabel="Complete Setup →"
+          onAction={() => navigate('/onboarding')}
+        />
+      </div>
+    );
+  }
+
+  // Should we show the monthly check-in modal?
+  const showCheckIn = monthlyRecord && monthlyRecord.confirmed === false;
+
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-6">
+
+        {/* Monthly Check-In Modal (overlay, not replacing dashboard) */}
+        {showCheckIn && (
+          <MonthlyCheckInModal
+            record={monthlyRecord}
+            onConfirmed={() => {
+              invalidate.afterCheckIn();
+            }}
+          />
+        )}
 
         {/* ═══ 1. Top Bar ═══ */}
         <div className="flex items-center justify-between">
@@ -167,7 +144,8 @@ export default function DashboardPage() {
               <p className="text-sm text-muted-foreground mt-0.5">{monthYear}</p>
             </div>
           </div>
-          <button className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center
+          <button onClick={() => navigate('/settings#notifications')}
+                  className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center
                              text-muted-foreground hover:bg-[#01411C]/10 hover:text-[#01411C]
                              transition-colors relative cursor-pointer"
                   aria-label="Notifications"
@@ -179,7 +157,32 @@ export default function DashboardPage() {
         </div>
 
         {/* ═══ 2. Summary Cards ═══ */}
-        <SummaryCards analysis={analysis} />
+        <SummaryCards analysis={analysis} monthlyRecord={monthlyRecord} />
+
+        {/* ═══ 2b. Add One-Time Income Button ═══ */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowOneTimeModal(true)}
+            className="h-10 px-4 rounded-xl bg-emerald-50 border border-emerald-200 text-sm font-semibold
+                       text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300
+                       transition-colors cursor-pointer flex items-center gap-2 shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            Add Bonus / Committee Money
+          </button>
+        </div>
+
+        {/* One-Time Income Modal */}
+        {showOneTimeModal && (
+          <OneTimeIncomeModal
+            onClose={() => setShowOneTimeModal(false)}
+            onAdded={(entry) => {
+              setShowOneTimeModal(false);
+              toast.success(`${formatPKR(entry.amount)} added to savings!`);
+              invalidate.afterOneTimeIncome();
+            }}
+          />
+        )}
 
         {/* ═══ 3. Life-Hours Toggle ═══ */}
         <LifeHoursToggle />
@@ -187,10 +190,13 @@ export default function DashboardPage() {
         {/* ═══ 4. Expense Breakdown ═══ */}
         <ExpenseBreakdown breakdown={analysis.expenses_breakdown} />
 
-        {/* ═══ 5 & 6. Goals + Inflation ═══ */}
+        {/* ═══ 5 & 6. Goals + One-Time Income + Inflation ═══ */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <GoalsPreview goals={analysis.goal_status} />
+          <GoalsPreview />
           <div className="space-y-4">
+            {/* Recent one-time income */}
+            <OneTimeIncomeList entries={oneTimeEntries} />
+
             {/* Quick stats from analysis */}
             {analysis.life_hours_breakdown && analysis.life_hours_breakdown.length > 0 && (
               <div className="p-5 rounded-2xl border border-border/60 bg-white shadow-sm">

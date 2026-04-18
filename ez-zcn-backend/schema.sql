@@ -12,7 +12,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- ============================================
 -- 8.1 Users Table
 -- ============================================
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email                 VARCHAR(255) UNIQUE NOT NULL,
   password_hash         VARCHAR(255) NOT NULL,         -- bcrypt, never plaintext
@@ -36,7 +36,7 @@ CREATE TABLE users (
 -- ============================================
 -- 8.2 Work Profile Table
 -- ============================================
-CREATE TABLE work_profiles (
+CREATE TABLE IF NOT EXISTS work_profiles (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id             UUID REFERENCES users(id) ON DELETE CASCADE,
   daily_work_hours    DECIMAL(4,2),                  -- e.g., 8.5 hours
@@ -53,7 +53,7 @@ CREATE TABLE work_profiles (
 -- ============================================
 -- 8.3 Income Sources Table
 -- ============================================
-CREATE TABLE income_sources (
+CREATE TABLE IF NOT EXISTS income_sources (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id             UUID REFERENCES users(id) ON DELETE CASCADE,
   source_name         VARCHAR(255) NOT NULL,          -- "Primary Salary", "Rental Income"
@@ -69,7 +69,7 @@ CREATE TABLE income_sources (
 -- ============================================
 -- 8.4 Expense Categories Master Table
 -- ============================================
-CREATE TABLE expense_categories (
+CREATE TABLE IF NOT EXISTS expense_categories (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   category_name       VARCHAR(100) NOT NULL,           -- "Utility Bills", "Grocery"
   parent_category_id  UUID REFERENCES expense_categories(id),  -- for sub-categories
@@ -80,7 +80,7 @@ CREATE TABLE expense_categories (
 -- ============================================
 -- 8.5 User Expenses Table
 -- ============================================
-CREATE TABLE user_expenses (
+CREATE TABLE IF NOT EXISTS user_expenses (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id             UUID REFERENCES users(id) ON DELETE CASCADE,
   category_id         UUID REFERENCES expense_categories(id),
@@ -97,7 +97,7 @@ CREATE TABLE user_expenses (
 -- ============================================
 -- 8.6 Weekly Expense Entries Table
 -- ============================================
-CREATE TABLE weekly_expense_entries (
+CREATE TABLE IF NOT EXISTS weekly_expense_entries (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id             UUID REFERENCES users(id) ON DELETE CASCADE,
   week_start_date     DATE NOT NULL,
@@ -113,7 +113,7 @@ CREATE TABLE weekly_expense_entries (
 -- ============================================
 -- 8.7 Savings Goals Table
 -- ============================================
-CREATE TABLE savings_goals (
+CREATE TABLE IF NOT EXISTS savings_goals (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id             UUID REFERENCES users(id) ON DELETE CASCADE,
   goal_name           VARCHAR(255) NOT NULL,            -- "Umrah", "New Car"
@@ -131,7 +131,7 @@ CREATE TABLE savings_goals (
 -- ============================================
 -- 8.8 Monthly Analysis Snapshots Table
 -- ============================================
-CREATE TABLE monthly_snapshots (
+CREATE TABLE IF NOT EXISTS monthly_snapshots (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id             UUID REFERENCES users(id) ON DELETE CASCADE,
   snapshot_month      DATE NOT NULL,                   -- first day of month
@@ -149,7 +149,7 @@ CREATE TABLE monthly_snapshots (
 -- ============================================
 -- 8.9 Inflation Data Cache Table
 -- ============================================
-CREATE TABLE inflation_cache (
+CREATE TABLE IF NOT EXISTS inflation_cache (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   data_type           VARCHAR(100) NOT NULL,           -- 'petrol_price', 'cpi', 'chicken_price'
   value               DECIMAL(12,4),
@@ -162,7 +162,7 @@ CREATE TABLE inflation_cache (
 -- ============================================
 -- 8.10 Notifications Log Table
 -- ============================================
-CREATE TABLE notifications_log (
+CREATE TABLE IF NOT EXISTS notifications_log (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id             UUID REFERENCES users(id) ON DELETE CASCADE,
   notification_type   VARCHAR(50),                     -- 'inflation', 'weekly_prompt', 'reengagement'
@@ -177,7 +177,7 @@ CREATE TABLE notifications_log (
 -- ============================================
 -- 8.11 Weekly Expense Entries Table
 -- ============================================
-CREATE TABLE weekly_expense_entries (
+CREATE TABLE IF NOT EXISTS weekly_expense_entries (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id             UUID REFERENCES users(id) ON DELETE CASCADE,
   week_start_date     DATE NOT NULL,                   -- must be a Monday
@@ -193,18 +193,18 @@ CREATE TABLE weekly_expense_entries (
 -- ============================================
 -- INDEXES for performance
 -- ============================================
-CREATE INDEX idx_work_profiles_user_id ON work_profiles(user_id);
-CREATE INDEX idx_income_sources_user_id ON income_sources(user_id);
-CREATE INDEX idx_user_expenses_user_id ON user_expenses(user_id);
-CREATE INDEX idx_user_expenses_category_id ON user_expenses(category_id);
-CREATE INDEX idx_weekly_entries_user_id ON weekly_expense_entries(user_id);
-CREATE INDEX idx_weekly_entries_dates ON weekly_expense_entries(week_start_date, week_end_date);
-CREATE INDEX idx_savings_goals_user_id ON savings_goals(user_id);
-CREATE INDEX idx_monthly_snapshots_user_id ON monthly_snapshots(user_id);
-CREATE INDEX idx_monthly_snapshots_month ON monthly_snapshots(snapshot_month);
-CREATE INDEX idx_inflation_cache_type ON inflation_cache(data_type);
-CREATE INDEX idx_notifications_user_id ON notifications_log(user_id);
-CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_work_profiles_user_id ON work_profiles(user_id);
+CREATE INDEX IF NOT EXISTS idx_income_sources_user_id ON income_sources(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_expenses_user_id ON user_expenses(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_expenses_category_id ON user_expenses(category_id);
+CREATE INDEX IF NOT EXISTS idx_weekly_entries_user_id ON weekly_expense_entries(user_id);
+CREATE INDEX IF NOT EXISTS idx_weekly_entries_dates ON weekly_expense_entries(week_start_date, week_end_date);
+CREATE INDEX IF NOT EXISTS idx_savings_goals_user_id ON savings_goals(user_id);
+CREATE INDEX IF NOT EXISTS idx_monthly_snapshots_user_id ON monthly_snapshots(user_id);
+CREATE INDEX IF NOT EXISTS idx_monthly_snapshots_month ON monthly_snapshots(snapshot_month);
+CREATE INDEX IF NOT EXISTS idx_inflation_cache_type ON inflation_cache(data_type);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications_log(user_id);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
 
 -- ============================================

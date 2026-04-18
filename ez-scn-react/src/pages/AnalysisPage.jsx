@@ -1,71 +1,77 @@
-import { useState, useEffect } from 'react';
+// ============================================
+// PennyWise — Analysis Page
+// Uses React Query for data fetching
+// ============================================
+
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { useAnalysis } from '@/hooks/useQueries';
+import LoadingSkeleton from '@/components/shared/LoadingSkeleton';
+import PageError from '@/components/shared/PageError';
+import EmptyState from '@/components/shared/EmptyState';
 import SafeCase from '@/components/analysis/SafeCase';
 import EdgeCase from '@/components/analysis/EdgeCase';
 import RedCase from '@/components/analysis/RedCase';
-import { Activity, RefreshCcw } from 'lucide-react';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import { Activity } from 'lucide-react';
 
 export default function AnalysisPage() {
   const { accessToken } = useAuth();
-  const [analysis, setAnalysis] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchAnalysis();
-  }, [accessToken]);
+  const {
+    data: analysisResponse,
+    error: analysisError,
+    isLoading: analysisLoading,
+    refetch: refetchAnalysis
+  } = useAnalysis();
 
-  async function fetchAnalysis() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`${API_URL}/api/analysis/monthly`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        credentials: 'include',
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to fetch analysis');
-      }
-      setAnalysis(data.analysis);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const loading = !accessToken || analysisLoading;
+  const analysis = analysisResponse?.success ? analysisResponse.analysis : null;
+  const error = analysisError?.message || (!analysisLoading && !analysisResponse?.success && analysisResponse?.error) || null;
+  const errorStatus = analysisError?.status || null;
+  const isEmpty = analysis && analysis.total_income === 0 && analysis.total_expenses === 0;
 
+  // ── Loading state ──
   if (loading) {
     return (
-      <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-8 animate-pulse">
-        <div className="h-32 bg-gray-200 rounded-2xl w-full"></div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="space-y-4">
-            <div className="h-48 bg-gray-200 rounded-2xl w-full"></div>
-            <div className="h-32 bg-gray-200 rounded-2xl w-full"></div>
-          </div>
-          <div className="h-96 bg-gray-200 rounded-2xl w-full"></div>
+      <div className="max-w-6xl mx-auto p-4 md:p-8">
+        <div className="mb-8">
+          <div className="h-9 w-56 bg-gray-200 rounded-lg animate-pulse mb-2" />
+          <div className="h-4 w-80 bg-gray-200 rounded-lg animate-pulse" />
         </div>
+        <LoadingSkeleton type="analysis" />
       </div>
     );
   }
 
+  // ── Error state ──
   if (error) {
     return (
       <div className="max-w-6xl mx-auto p-4 md:p-8">
-        <div className="p-6 rounded-2xl bg-red-50 border border-red-200 text-center">
-          <Activity className="w-12 h-12 text-red-400 mx-auto mb-4" />
-          <h2 className="text-lg font-bold text-red-800 mb-2">Analysis Currently Unavailable</h2>
-          <p className="text-red-600 mb-6">{error}</p>
-          <button 
-            onClick={fetchAnalysis}
-            className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center gap-2 mx-auto"
-          >
-            <RefreshCcw className="w-4 h-4" /> Retry
-          </button>
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-foreground">Financial Analysis</h1>
+          <p className="text-muted-foreground mt-1">Insights based on your income, expenses, and inflation trends.</p>
         </div>
+        <PageError error={error} status={errorStatus} onRetry={() => refetchAnalysis()} />
+      </div>
+    );
+  }
+
+  // ── Empty state ──
+  if (isEmpty) {
+    return (
+      <div className="max-w-6xl mx-auto p-4 md:p-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-foreground">Financial Analysis</h1>
+          <p className="text-muted-foreground mt-1">Insights based on your income, expenses, and inflation trends.</p>
+        </div>
+        <EmptyState
+          icon="📊"
+          title="No Financial Data Yet"
+          description="Add your income sources and monthly expenses first. We'll crunch the numbers and give you a complete financial health report."
+          actionLabel="Set Up Income & Expenses"
+          onAction={() => navigate('/onboarding')}
+        />
       </div>
     );
   }
@@ -76,7 +82,7 @@ export default function AnalysisPage() {
     <div className="max-w-6xl mx-auto p-4 md:p-8 pt-6">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-foreground">Financial Analysis</h1>
-        <p className="text-muted-foreground mt-1">AI-driven insights based on your income, expenses, and inflation trends.</p>
+        <p className="text-muted-foreground mt-1">Insights based on your income, expenses, and inflation trends.</p>
       </div>
 
       {analysis.health_status === 'safe' && <SafeCase analysis={analysis} />}

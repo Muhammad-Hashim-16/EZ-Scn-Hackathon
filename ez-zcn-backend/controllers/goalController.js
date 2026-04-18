@@ -1,8 +1,35 @@
 // ============================================
-// PennyWise — Goals Controller
+// PennyWise — Goals Controller (v2)
+//
+// Goals are funded ONLY by manual transfers
+// from cumulative savings. No auto-deductions.
 // ============================================
 
 const db = require('../config/db');
+
+// ── Ensure goal_transfers table exists ──
+async function ensureGoalTables() {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS goal_transfers (
+        id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id         UUID REFERENCES users(id) ON DELETE CASCADE,
+        goal_id         UUID REFERENCES savings_goals(id) ON DELETE CASCADE,
+        amount          DECIMAL(12,2) NOT NULL,
+        transfer_date   DATE DEFAULT CURRENT_DATE,
+        created_at      TIMESTAMP DEFAULT NOW()
+      );
+    `);
+  } catch (err) {
+    console.error('Goals — ensureGoalTables error:', err.message);
+  }
+}
+
+// ── Helper: current month string ──
+function currentMonthStr() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+}
 
 // ============================================
 // POST /api/goals — Create a new goal
@@ -12,7 +39,6 @@ async function createGoal(req, res) {
     const userId = req.user.id;
     const { goal_name, target_amount, target_months, priority_order } = req.body;
 
-    // ── Validate ──
     if (!goal_name || typeof goal_name !== 'string' || goal_name.trim().length < 1) {
       return res.status(400).json({ success: false, error: 'Goal name is required.', code: 'VALIDATION_ERROR' });
     }
@@ -27,58 +53,39 @@ async function createGoal(req, res) {
       return res.status(400).json({ success: false, error: 'Target months must be between 1 and 120.', code: 'VALIDATION_ERROR' });
     }
 
-    // ── Auto-calculate ──
-    const monthlyDeduction = Math.ceil((amount / months) * 100) / 100;
+    // Monthly transfer suggestion (not enforced — user transfers manually)
+    const suggestedMonthly = Math.ceil((amount / months) * 100) / 100;
     const targetDate = new Date();
     targetDate.setMonth(targetDate.getMonth() + months);
 
-    // ── Check achievability ──
+    // Check if savings can support this goal
     let warning = null;
     try {
-      const incomeResult = await db.query(
-        `SELECT COALESCE(SUM(amount), 0) AS total
-         FROM income_sources
-         WHERE user_id = $1 AND is_active = TRUE AND frequency = 'monthly' AND income_type = 'fixed'`,
-        [userId]
+      const monthStr = currentMonthStr();
+      const savingsResult = await db.query(
+        `SELECT cumulative_savings FROM monthly_records WHERE user_id = $1 AND month = $2`,
+        [userId, monthStr]
       );
-      const expenseResult = await db.query(
-        `SELECT COALESCE(SUM(monthly_amount), 0) AS total FROM user_expenses WHERE user_id = $1 AND is_active = TRUE`,
-        [userId]
-      );
-      const existingGoalsResult = await db.query(
-        `SELECT COALESCE(SUM(monthly_deduction), 0) AS total FROM savings_goals WHERE user_id = $1 AND is_achieved = FALSE`,
-        [userId]
-      );
+      const currentSavings = savingsResult.rows.length > 0
+        ? parseFloat(savingsResult.rows[0].cumulative_savings)
+        : 0;
 
-      const totalIncome = parseFloat(incomeResult.rows[0].total);
-      const totalExpenses = parseFloat(expenseResult.rows[0].total);
-      const existingGoalDeductions = parseFloat(existingGoalsResult.rows[0].total);
-      const netSavings = totalIncome - totalExpenses - existingGoalDeductions;
-
-      if (monthlyDeduction > netSavings && netSavings > 0) {
-        const revisedMonths = Math.ceil(amount / netSavings);
-        warning = `This goal requires PKR ${monthlyDeduction.toLocaleString()}/month but you only save PKR ${Math.round(netSavings).toLocaleString()}/month. Revised timeline: ${revisedMonths} months.`;
-      } else if (netSavings <= 0) {
-        warning = `You currently have no net savings. This goal may not be achievable without increasing income or reducing expenses.`;
+      if (currentSavings <= 0) {
+        warning = 'You currently have no savings. Transfer funds to this goal as your savings grow.';
       }
-    } catch {
-      // Achievability check failed — non-fatal, proceed
-    }
+    } catch { /* non-fatal */ }
 
-    // ── Insert ──
     const result = await db.query(
       `INSERT INTO savings_goals
          (user_id, goal_name, target_amount, target_months, monthly_deduction, target_date, priority_order)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [userId, goal_name.trim(), amount, months, monthlyDeduction, targetDate, priority_order || 1]
+      [userId, goal_name.trim(), amount, months, suggestedMonthly, targetDate, priority_order || 1]
     );
-
-    const goal = result.rows[0];
 
     return res.status(201).json({
       success: true,
-      goal: formatGoal(goal),
+      goal: formatGoal(result.rows[0]),
       ...(warning && { warning }),
     });
   } catch (error) {
@@ -100,20 +107,29 @@ async function getGoals(req, res) {
     );
 
     // Get inflation rate for adjusted target
-    let annualInflation = 12.0;
+    let annualInflation = 1.4;
     try {
       const inflResult = await db.query(
-        `SELECT value FROM inflation_cache WHERE data_type = 'cpi' ORDER BY fetched_at DESC LIMIT 1`
+        `SELECT value FROM inflation_cache WHERE data_type = 'inflation_rate' ORDER BY fetched_at DESC LIMIT 1`
       );
       if (inflResult.rows.length > 0) annualInflation = parseFloat(inflResult.rows[0].value);
     } catch { /* fallback */ }
 
     const monthlyInf = Math.pow(1 + annualInflation / 100, 1 / 12) - 1;
 
+    // Get cumulative savings for the "available" display
+    const monthStr = currentMonthStr();
+    const savingsResult = await db.query(
+      `SELECT cumulative_savings FROM monthly_records WHERE user_id = $1 AND month = $2`,
+      [userId, monthStr]
+    );
+    const cumulativeSavings = savingsResult.rows.length > 0
+      ? parseFloat(savingsResult.rows[0].cumulative_savings)
+      : 0;
+
     const goals = result.rows.map((g) => {
       const formatted = formatGoal(g);
 
-      // Inflation-adjusted target
       const monthsRemaining = formatted.months_remaining > 0 ? formatted.months_remaining : 0;
       const adjustedTarget = parseFloat(g.target_amount) * Math.pow(1 + monthlyInf, monthsRemaining);
       formatted.inflation_adjusted_target = Math.round(adjustedTarget * 100) / 100;
@@ -122,7 +138,12 @@ async function getGoals(req, res) {
       return formatted;
     });
 
-    return res.status(200).json({ success: true, goals, count: goals.length });
+    return res.status(200).json({
+      success: true,
+      goals,
+      count: goals.length,
+      cumulative_savings: cumulativeSavings,
+    });
   } catch (error) {
     console.error('Goals Controller — getGoals error:', error);
     return res.status(500).json({ success: false, error: 'Failed to fetch goals.', code: 'SERVER_ERROR' });
@@ -130,48 +151,144 @@ async function getGoals(req, res) {
 }
 
 // ============================================
-// PUT /api/goals/:id/contribute
+// POST /api/goals/:id/transfer
+//
+// Transfer money FROM savings TO a goal.
+// Uses a database transaction for atomicity.
 // ============================================
-async function contributeToGoal(req, res) {
+async function transferToGoal(req, res) {
+  const client = await db.getClient();
   try {
     const userId = req.user.id;
     const goalId = req.params.id;
     const { amount } = req.body;
 
-    const contributionAmount = parseFloat(amount);
-    if (!contributionAmount || contributionAmount <= 0) {
-      return res.status(400).json({ success: false, error: 'Contribution amount must be > 0.', code: 'VALIDATION_ERROR' });
+    const transferAmount = parseFloat(amount);
+    if (!transferAmount || transferAmount <= 0) {
+      return res.status(400).json({ success: false, error: 'Transfer amount must be greater than 0.', code: 'VALIDATION_ERROR' });
     }
 
-    // Verify ownership
-    const existing = await db.query(
-      'SELECT * FROM savings_goals WHERE id = $1 AND user_id = $2',
+    await client.query('BEGIN');
+
+    // 1. Check cumulative savings
+    const monthStr = currentMonthStr();
+    const savingsResult = await client.query(
+      `SELECT cumulative_savings FROM monthly_records WHERE user_id = $1 AND month = $2 FOR UPDATE`,
+      [userId, monthStr]
+    );
+
+    if (savingsResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, error: 'No monthly record found. Please confirm your monthly check-in first.', code: 'NO_RECORD' });
+    }
+
+    const currentSavings = parseFloat(savingsResult.rows[0].cumulative_savings);
+
+    if (transferAmount > currentSavings) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        error: `Insufficient savings. Available: PKR ${currentSavings.toLocaleString()}, requested: PKR ${transferAmount.toLocaleString()}.`,
+        code: 'INSUFFICIENT_SAVINGS',
+        available: currentSavings,
+      });
+    }
+
+    // 2. Verify goal ownership
+    const goalResult = await client.query(
+      `SELECT * FROM savings_goals WHERE id = $1 AND user_id = $2 FOR UPDATE`,
       [goalId, userId]
     );
-    if (existing.rows.length === 0) {
+
+    if (goalResult.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ success: false, error: 'Goal not found.', code: 'NOT_FOUND' });
     }
 
-    const goal = existing.rows[0];
-    const newSaved = parseFloat(goal.amount_saved) + contributionAmount;
-    const isAchieved = newSaved >= parseFloat(goal.target_amount);
+    const goal = goalResult.rows[0];
+    if (goal.is_achieved) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, error: 'This goal is already achieved.', code: 'ALREADY_ACHIEVED' });
+    }
 
-    const result = await db.query(
-      `UPDATE savings_goals
-       SET amount_saved = $1, is_achieved = $2
-       WHERE id = $3 AND user_id = $4
-       RETURNING *`,
-      [Math.min(newSaved, parseFloat(goal.target_amount)), isAchieved, goalId, userId]
+    // 3. Deduct from savings
+    const newSavings = currentSavings - transferAmount;
+    await client.query(
+      `UPDATE monthly_records SET cumulative_savings = $3 WHERE user_id = $1 AND month = $2`,
+      [userId, monthStr, newSavings]
+    );
+
+    // 4. Add to goal
+    const newAmountSaved = parseFloat(goal.amount_saved) + transferAmount;
+    const goalTarget = parseFloat(goal.target_amount);
+    const cappedSaved = Math.min(newAmountSaved, goalTarget);
+    const isAchieved = newAmountSaved >= goalTarget;
+
+    await client.query(
+      `UPDATE savings_goals SET amount_saved = $3, is_achieved = $4 WHERE id = $1 AND user_id = $2`,
+      [goalId, userId, cappedSaved, isAchieved]
+    );
+
+    // 5. Record the transfer
+    await client.query(
+      `INSERT INTO goal_transfers (user_id, goal_id, amount) VALUES ($1, $2, $3)`,
+      [userId, goalId, transferAmount]
+    );
+
+    await client.query('COMMIT');
+
+    // Fetch updated goal
+    const updatedGoal = await db.query(
+      `SELECT * FROM savings_goals WHERE id = $1 AND user_id = $2`,
+      [goalId, userId]
     );
 
     return res.status(200).json({
       success: true,
-      goal: formatGoal(result.rows[0]),
-      ...(isAchieved && { message: '🎉 Congratulations! You achieved this goal!' }),
+      message: isAchieved ? '🎉 Congratulations! You achieved this goal!' : 'Transfer successful.',
+      new_savings: Math.round(newSavings * 100) / 100,
+      goal: formatGoal(updatedGoal.rows[0]),
+      is_achieved: isAchieved,
     });
   } catch (error) {
-    console.error('Goals Controller — contribute error:', error);
-    return res.status(500).json({ success: false, error: 'Failed to contribute.', code: 'SERVER_ERROR' });
+    await client.query('ROLLBACK');
+    console.error('Goals Controller — transferToGoal error:', error);
+    return res.status(500).json({ success: false, error: 'Transfer failed.', code: 'SERVER_ERROR' });
+  } finally {
+    client.release();
+  }
+}
+
+// ============================================
+// GET /api/goals/:id/transfers
+// Returns transfer history for a goal
+// ============================================
+async function getGoalTransfers(req, res) {
+  try {
+    const userId = req.user.id;
+    const goalId = req.params.id;
+
+    const result = await db.query(
+      `SELECT id, amount, transfer_date, created_at
+       FROM goal_transfers
+       WHERE user_id = $1 AND goal_id = $2
+       ORDER BY transfer_date DESC`,
+      [userId, goalId]
+    );
+
+    return res.status(200).json({
+      success: true,
+      transfers: result.rows.map(r => ({
+        id: r.id,
+        amount: parseFloat(r.amount),
+        transfer_date: r.transfer_date,
+        created_at: r.created_at,
+      })),
+      total: result.rows.reduce((s, r) => s + parseFloat(r.amount), 0),
+    });
+  } catch (error) {
+    console.error('Goals Controller — getGoalTransfers error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to fetch transfers.', code: 'SERVER_ERROR' });
   }
 }
 
@@ -203,10 +320,9 @@ async function deleteGoal(req, res) {
 function formatGoal(g) {
   const target = parseFloat(g.target_amount);
   const saved = parseFloat(g.amount_saved || 0);
-  const monthly = parseFloat(g.monthly_deduction || 0);
-  const progress = target > 0 ? Math.round((saved / target) * 10000) / 100 : 0;
+  const suggestedMonthly = parseFloat(g.monthly_deduction || 0);
+  const progress = target > 0 ? Math.round((saved / target) * 100) : 0;
 
-  // Months remaining
   const now = new Date();
   const targetDate = g.target_date ? new Date(g.target_date) : null;
   let monthsRemaining = 0;
@@ -214,15 +330,14 @@ function formatGoal(g) {
     monthsRemaining = Math.max(0, Math.ceil((targetDate - now) / (30.44 * 24 * 60 * 60 * 1000)));
   }
 
-  // On pace?
   let status = 'on_track';
   if (g.is_achieved) {
     status = 'achieved';
-  } else if (monthly <= 0 || (target - saved > 0 && monthsRemaining <= 0)) {
-    status = 'impossible';
-  } else {
-    const requiredMonthly = monthsRemaining > 0 ? (target - saved) / monthsRemaining : Infinity;
-    if (requiredMonthly > monthly * 1.25) {
+  } else if (monthsRemaining <= 0 && saved < target) {
+    status = 'overdue';
+  } else if (monthsRemaining > 0) {
+    const requiredMonthly = (target - saved) / monthsRemaining;
+    if (requiredMonthly > suggestedMonthly * 1.5) {
       status = 'behind';
     }
   }
@@ -232,7 +347,7 @@ function formatGoal(g) {
     goal_name: g.goal_name,
     target_amount: target,
     amount_saved: saved,
-    monthly_deduction: monthly,
+    suggested_monthly: suggestedMonthly,
     target_months: g.target_months,
     start_date: g.start_date,
     target_date: g.target_date,
@@ -246,4 +361,4 @@ function formatGoal(g) {
   };
 }
 
-module.exports = { createGoal, getGoals, contributeToGoal, deleteGoal };
+module.exports = { createGoal, getGoals, transferToGoal, getGoalTransfers, deleteGoal, ensureGoalTables };

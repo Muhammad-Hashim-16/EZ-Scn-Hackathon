@@ -3,6 +3,7 @@
 // ============================================
 
 import { Plus, X, Target } from 'lucide-react';
+import { formatPKR } from '@/utils/formatters';
 
 export default function StepGoals({ data, updateData }) {
 
@@ -125,7 +126,7 @@ export default function StepGoals({ data, updateData }) {
                   <div className="p-3 rounded-lg bg-[#01411C]/[0.04] border border-[#01411C]/10">
                     <p className="text-xs text-muted-foreground">Monthly saving needed</p>
                     <p className="text-lg font-bold text-[#01411C]">
-                      PKR {monthlySaving.toLocaleString()}
+                      {formatPKR(monthlySaving)}
                       <span className="text-xs font-normal text-muted-foreground ml-1">/month</span>
                     </p>
                   </div>

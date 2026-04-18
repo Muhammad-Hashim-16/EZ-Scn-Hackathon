@@ -1,13 +1,27 @@
 // ============================================
 // Dashboard — Goals Preview (first 2 active)
+// Now fetches its own data via useGoals() so it
+// stays in sync when goals are added/modified.
 // ============================================
 
 import { Link } from 'react-router-dom';
-import { Target, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Target, CheckCircle2, AlertTriangle, ArrowRight, Loader2 } from 'lucide-react';
 import { useLifeHours } from '@/context/LifeHoursContext';
+import { useGoals } from '@/hooks/useQueries';
 
-export default function GoalsPreview({ goals }) {
+export default function GoalsPreview() {
   const { fmt } = useLifeHours();
+  const { data: goalsResponse, isLoading } = useGoals();
+
+  const goals = goalsResponse?.success ? goalsResponse.goals : [];
+
+  if (isLoading) {
+    return (
+      <div className="p-6 rounded-2xl border border-border/60 bg-white shadow-sm flex items-center justify-center">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   if (!goals || goals.length === 0) {
     return (
@@ -24,7 +38,22 @@ export default function GoalsPreview({ goals }) {
     );
   }
 
-  const active = goals.filter((g) => !g.is_completed).slice(0, 2);
+  const active = goals.filter((g) => !g.is_achieved).slice(0, 2);
+
+  if (active.length === 0) {
+    return (
+      <div className="p-6 rounded-2xl border border-dashed border-border bg-gray-50/50 text-center">
+        <CheckCircle2 className="w-10 h-10 text-green-500 mx-auto mb-3 opacity-60" />
+        <p className="text-sm text-muted-foreground mb-1">All goals achieved! 🎉</p>
+        <Link
+          to="/goals"
+          className="text-sm font-semibold text-[#01411C] hover:underline"
+        >
+          Set a new goal →
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="p-5 rounded-2xl border border-border/60 bg-white shadow-sm">
@@ -44,9 +73,11 @@ export default function GoalsPreview({ goals }) {
       <div className="space-y-4">
         {active.map((goal) => {
           const progress = goal.progress_percent || 0;
-          const isOnTrack = goal.status === 'on_track' || goal.status === 'completed';
-          const monthsText = goal.estimated_months_left != null
-            ? `${goal.estimated_months_left} month${goal.estimated_months_left !== 1 ? 's' : ''} left`
+          const isOnTrack = goal.status === 'on_track' || goal.status === 'achieved';
+          // Support both field names: months_remaining (from /api/goals) and estimated_months_left (from analysis)
+          const monthsLeft = goal.months_remaining ?? goal.estimated_months_left;
+          const monthsText = monthsLeft != null && monthsLeft !== Infinity
+            ? `${monthsLeft} month${monthsLeft !== 1 ? 's' : ''} left`
             : 'Timeline TBD';
 
           return (
@@ -79,7 +110,7 @@ export default function GoalsPreview({ goals }) {
 
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>
-                  Saved: <strong className="text-foreground">{fmt(goal.current_amount)}</strong>
+                  Saved: <strong className="text-foreground">{fmt(goal.amount_saved)}</strong>
                 </span>
                 <span>
                   Target: <strong className="text-foreground">{fmt(goal.target_amount)}</strong>

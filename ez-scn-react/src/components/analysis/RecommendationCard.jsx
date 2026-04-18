@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Lightbulb, ChevronDown, ChevronUp } from 'lucide-react';
+import { formatPKR } from '@/utils/formatters';
 
 export default function RecommendationCard({ rec }) {
   const [expanded, setExpanded] = useState(false);
@@ -47,8 +48,8 @@ export default function RecommendationCard({ rec }) {
             </div>
             
             <p className="text-xs text-muted-foreground whitespace-nowrap">
-              Current: <span className="font-semibold text-foreground mr-2">PKR {Number(rec.current_amount).toLocaleString()}</span>
-              Target: <span className="font-semibold text-foreground">PKR {Number(rec.recommended_amount).toLocaleString()}</span>
+              Current: <span className="font-semibold text-foreground mr-2">{formatPKR(rec.current_amount)}</span>
+              Target: <span className="font-semibold text-foreground">{formatPKR(rec.recommended_amount)}</span>
             </p>
           </div>
         </div>
@@ -57,7 +58,7 @@ export default function RecommendationCard({ rec }) {
           {rec.potential_savings > 0 && (
             <div className="text-right hidden sm:block">
               <p className="text-[10px] font-medium text-muted-foreground uppercase opacity-80">Potential Savings</p>
-              <p className="text-sm font-bold text-green-600">PKR {Number(rec.potential_savings).toLocaleString()}/mo</p>
+              <p className="text-sm font-bold text-green-600">{formatPKR(rec.potential_savings)}/mo</p>
             </div>
           )}
           <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-50 text-gray-500 group-hover:bg-[#01411C]/10 group-hover:text-[#01411C] transition-colors">

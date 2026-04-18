@@ -151,4 +151,36 @@ router.delete(
   incomeController.deleteIncomeSource
 );
 
+// ============================================
+// ONE-TIME INCOME ROUTES
+// ============================================
+
+const oneTimeValidation = [
+  body('description')
+    .optional()
+    .trim()
+    .isLength({ max: 255 }).withMessage('Description must be under 255 characters.'),
+
+  body('amount')
+    .notEmpty().withMessage('Amount is required.')
+    .isFloat({ gt: 0 }).withMessage('Amount must be greater than 0.'),
+
+  body('received_date')
+    .optional()
+    .isISO8601().withMessage('Received date must be a valid date.'),
+];
+
+router.post(
+  '/one-time',
+  oneTimeValidation,
+  handleValidationErrors,
+  incomeController.createOneTimeIncome
+);
+
+router.get(
+  '/one-time',
+  incomeController.getOneTimeIncome
+);
+
 module.exports = router;
+
