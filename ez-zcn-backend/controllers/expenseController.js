@@ -4,6 +4,7 @@
 // ============================================
 
 const db = require('../config/db');
+const analysisController = require('./analysisController');
 
 // UUID of the "Custom Expenses" parent category from seed data
 const CUSTOM_CATEGORY_ID = 'a0000000-0000-4000-8000-000000000014';
@@ -365,6 +366,9 @@ async function updateExpense(req, res) {
     // Recalculate all category percentages since amounts changed
     await recalcPercentages(db, userId);
 
+    // Clear analysis cache
+    await analysisController.clearAnalysisCache(userId);
+
     return res.status(200).json({
       success: true,
       expense: result.rows[0],
@@ -614,6 +618,9 @@ async function redistributeExpenses(req, res) {
         [userId, monthStr, newTotal, newNet, newCumulative]
       );
     }
+
+    // 8. Clear/invalidate the analysis cache for this user
+    await analysisController.clearAnalysisCache(userId);
 
     return res.status(200).json({
       success: true,

@@ -45,6 +45,11 @@ function getCacheKey(userId) {
   return `analysis_${userId}_${month}`;
 }
 
+// Helper: explicit cache flush for other controllers
+async function clearAnalysisCache(userId) {
+  await cache.del(`analysis_${userId}`);
+}
+
 // ============================================
 // GET /api/analysis/monthly
 // Full analysis — cached for 1 hour
@@ -280,4 +285,5 @@ module.exports = {
   getDashboardAnalysis,
   getSnapshot,
   getTrends,
+  clearAnalysisCache,
 };
