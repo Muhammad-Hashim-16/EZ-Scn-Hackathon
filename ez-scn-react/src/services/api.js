@@ -9,12 +9,8 @@
 // ✅ Consistent error shape for all consumers
 // ============================================
 
-const isProd = import.meta.env.PROD;
-
-// Hardcoding the exact API URL to override Vercel variable bugs
-const API_BASE = (isProd 
-  ? 'https://postgres-production-9e3f.up.railway.app' 
-  : 'http://localhost:5000') + '/api';
+const API_BASE =
+  (import.meta.env.VITE_API_URL || 'http://localhost:5000') + '/api';
 
 // ── Token storage (in-memory, synced with AuthContext) ──
 let _accessToken = null;
