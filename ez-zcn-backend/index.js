@@ -221,18 +221,52 @@ const { startNotificationJobs } = require('./jobs/notificationJob');
 const { ensureTable: ensureMonthlyRecords } = require('./controllers/monthlyRecordController');
 const { ensureGoalTables } = require('./controllers/goalController');
 
-app.listen(PORT, () => {
+// Helper to fully initialize database on remote servers behind the scenes
+async function autoInitializeLiveDatabase() {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const db = require('./config/db');
+
+    console.log('Checking if base users table exists...');
+    const result = await db.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_name = 'users'
+      );
+    `);
+    
+    if (!result.rows[0].exists) {
+      console.log('⚡ WARNING: Empty database detected! Bootstrapping tables automatically...');
+      const schemaSql = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
+      await db.query(schemaSql);
+      
+      console.log('⚡ Bootstrapping default demo categories...');
+      const seedSql = fs.readFileSync(path.join(__dirname, 'seed_demo.sql'), 'utf8');
+      await db.query(seedSql);
+      
+      console.log('✅ Remote Database fully initialized natively!');
+    }
+  } catch (error) {
+    console.error('❌ Failed to initialize database on boot:', error);
+  }
+}
+
+app.listen(PORT, async () => {
   console.log(`\n🪙  PennyWise API is running`);
   console.log(`   Port:        ${PORT}`);
   console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`   Frontend:    ${allowedOrigin}`);
   console.log(`   Health:      http://localhost:${PORT}/api/health\n`);
 
+  // Force database creation if tables are missing
+  await autoInitializeLiveDatabase();
+
   // Start background jobs
   startInflationJob();
   startNotificationJobs();
 
-  // Ensure tables exist
+  // Ensure module-specific tables exist
   ensureMonthlyRecords();
   ensureGoalTables();
 });
