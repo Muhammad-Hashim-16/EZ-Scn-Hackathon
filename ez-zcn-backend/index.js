@@ -16,6 +16,9 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const IS_PROD = process.env.NODE_ENV === 'production';
 
+// Trust proxy required for Railway/Render environments to set Secure cookies
+app.set('trust proxy', 1);
+
 // ============================================
 // 1. Security Headers — Helmet (hardened)
 // ============================================
